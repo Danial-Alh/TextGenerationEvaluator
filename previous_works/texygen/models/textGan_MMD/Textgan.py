@@ -287,12 +287,24 @@ class TextganMmd(Gan):
                 self.train_discriminator()
         return
 
-    def init_real_trainng(self, data_loc=None):
+    def init_real_trainng(self, data_loc=None, parser=None):
         from ...utils.text_process import text_precess, text_to_code
         from ...utils.text_process import get_tokenlized
-        if data_loc is None:
-            data_loc = 'data/old_image_coco.txt'
-        self.sequence_length, self.vocab_size = text_precess(data_loc)
+        tokens = get_tokenlized(data_loc)
+        if parser is not None:
+            self.sequence_length, self.vocab_size = parser.max_length, parser.vocab.shape[0]
+            word_index_dict, index_word_dict = parser.vocab2id, parser.id2vocab,
+            self.start_token, self.end_token = parser.START_TOKEN_ID, parser.END_TOKEN_ID
+            import shutil
+            shutil.copy(data_loc, self.oracle_file)
+            print('parser set from outside!')
+        else:
+            self.start_token, self.end_token = 0, 0
+            self.sequence_length, self.vocab_size = text_precess(data_loc)
+            dictionaries_name = data_loc.split('/')[-1].split('.')[0] + '_dictionaries'
+            [word_index_dict, index_word_dict] = load_or_create_dictionary(tokens, self.saving_path, dictionaries_name)
+            with open(self.oracle_file, 'w') as outfile:
+                outfile.write(text_to_code(tokens, word_index_dict, self.sequence_length))
 
         g_embeddings = tf.Variable(tf.random_normal(shape=[self.vocab_size, self.emb_dim], stddev=0.1))
         discriminator = Discriminator(sequence_length=self.sequence_length, num_classes=2,
@@ -305,38 +317,29 @@ class TextganMmd(Gan):
                               g_embeddings=g_embeddings, discriminator=discriminator, start_token=self.start_token)
         self.set_generator(generator)
 
-        gen_dataloader = DataLoader(batch_size=self.batch_size, seq_length=self.sequence_length)
+        gen_dataloader = DataLoader(batch_size=self.batch_size, seq_length=self.sequence_length,
+                                    end_token=self.end_token)
         oracle_dataloader = None
         dis_dataloader = DisDataloader(batch_size=self.batch_size, seq_length=self.sequence_length)
 
         self.set_data_loader(gen_loader=gen_dataloader, dis_loader=dis_dataloader, oracle_loader=oracle_dataloader)
-        tokens = get_tokenlized(data_loc)
-        dictionaries_name = data_loc.split('/')[-1].split('.')[0] + '_dictionaries'
-        [word_index_dict, index_word_dict] = load_or_create_dictionary(tokens, self.saving_path, dictionaries_name)
-        with open(self.oracle_file, 'w') as outfile:
-            outfile.write(text_to_code(tokens, word_index_dict, self.sequence_length))
         return word_index_dict, index_word_dict
 
-    def init_real_metric(self):
-        # docsim = DocEmbSim(oracle_file=self.oracle_file, generator_file=self.generator_file,
-        #                    num_vocabulary=self.vocab_size)
-        # self.add_metric(docsim)
-
-        inll = Nll(data_loader=self.gen_data_loader, rnn=self.generator, sess=self.sess)
-        inll.set_name('nll-test')
-        self.add_metric(inll)
-
-    def train_real(self, data_loc=None):
+    def train_real(self, data_loc=None, wrapper_ref=None):
         from ...utils.text_process import code_to_text
         from ...utils.text_process import get_tokenlized
-        wi_dict, iw_dict = self.init_real_trainng(data_loc)
+        if wrapper_ref is None:
+            wi_dict, iw_dict = self.init_real_trainng(data_loc)
+        else:
+            self.wrapper = wrapper_ref
+            wi_dict, iw_dict = self.wrapper.parser.vocab2id, self.wrapper.parser.id2vocab
         self.init_real_metric()
 
         def get_real_test_file(dict=iw_dict):
             with open(self.generator_file, 'r') as file:
                 codes = get_tokenlized(self.generator_file)
             with open(self.test_file, 'w') as outfile:
-                outfile.write(code_to_text(codes=codes, dictionary=dict))
+                outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=len(iw_dict) - 1))
 
         def get_real_code():
             text = get_tokenlized(self.oracle_file)
@@ -346,10 +349,6 @@ class TextganMmd(Gan):
 
             codes = list(map(toint_list, text))
             return codes
-
-        self.sess.run(tf.global_variables_initializer())
-        self.sess.run(tf.local_variables_initializer())
-        self.load_generator_discriminator()
 
         self.pre_epoch_num = 80
         self.adversarial_epoch_num = 100

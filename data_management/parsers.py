@@ -46,9 +46,10 @@ class Parser(PersistentClass):
         return result
 
     def _split_lines(self, lines):
-        if isinstance(lines, list):
-            return [self.vocab_separator_function(line) for line in lines]
-        return self.vocab_separator_function(lines)
+        if isinstance(lines, str):
+            return self.vocab_separator_function(lines)
+        return [self.vocab_separator_function(line) for line in lines]
+
 
     def _compute_max_length(self, lines):
         self.max_length = np.max([len(line) for line in lines]) + 2
@@ -62,7 +63,8 @@ class Parser(PersistentClass):
         np.random.shuffle(self.vocab)
         self.vocab = np.concatenate((self.vocab, [self.START_TOKEN, self.END_TOKEN]), axis=0)
         self.id2vocab = {str(i): v for i, v in enumerate(self.vocab)}
-        self.vocab2id = dict(zip(self.vocab, list(range(self.vocab.shape[0]))))
+        # self.vocab2id = dict(zip(self.vocab, list(range(self.vocab.shape[0]))))
+        self.vocab2id = {v: i for i, v in enumerate(self.vocab)}
         self.START_TOKEN_ID = self.vocab2id[self.START_TOKEN]
         self.END_TOKEN_ID = self.vocab2id[self.END_TOKEN]
 
@@ -80,15 +82,15 @@ class Parser(PersistentClass):
                    ([self.vocab2id[self.END_TOKEN]] * (self.max_length - (len(vocabs) + 1))), \
                    (len(vocabs) + 2)  # +1 for start token
 
-        if isinstance(lines, list) or isinstance(lines, np.ndarray):
+        if isinstance(lines, str):
+            id_formatted, lengths = convert(lines)
+        else:
             id_formatted = []
             lengths = []
             for line in lines:
                 formatted, l = convert(line)
                 id_formatted.append(formatted)
                 lengths.append(l)
-        else:
-            id_formatted, lengths = convert(lines)
         return id_formatted, lengths
 
     def id_format2line(self, id_format_lines, trim=False, reverse=False):
@@ -112,7 +114,7 @@ class Parser(PersistentClass):
                        line[line_slice.start:line_slice.stop][::-1] + line[line_slice.stop:]
             if trim:
                 line = line[line_slice]
-            return self.vocab_separator_character.join([self.id2vocab[vocab_id] for vocab_id in line])
+            return self.vocab_separator_character.join([self.id2vocab[str(vocab_id)] for vocab_id in line])
 
         if not isinstance(id_format_lines[0], (np.int, np.int64, np.int32, int)):
             return [convert(l) for l in id_format_lines]
@@ -141,8 +143,6 @@ class WordBasedParser(Parser):
 if __name__ == '__main__':
     from file_handler import read_text
 
-    lines = []
-    for l in read_text('rhymes-shahnameh-golestan-ghazaliat', ):
-        lines.extend(l.split(','))
-    p = CharacterBasedParser(lines, 'words')
-    print(p.id_format2line(p.line2id_format('علی', True)[0], True, True))
+    lines = read_text('coco-train')
+    p = WordBasedParser(lines, 'coco-words')
+    print(p.id_format2line(p.line2id_format('he is gone')[0], True))

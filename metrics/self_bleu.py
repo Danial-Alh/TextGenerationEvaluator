@@ -32,7 +32,7 @@ class SelfBleu():  # this class speedup computation when reference is same for m
 
     def get_score(self):
         ref_max_counts = deepcopy(self.reference_max_counts)
-        return [self.tmp_get_score(ref_max_counts, i) for i in tqdm(range(len(self.references)))]
+        return [self.tmp_get_score(ref_max_counts, i) for i in range(len(self.references))]
 
     def tmp_get_score(self, ref_max_counts, i):
         item = self.references[i]
@@ -53,7 +53,7 @@ class SelfBleu():  # this class speedup computation when reference is same for m
         return result
 
     def get_reference_max_counts(self, n):
-        print('calculating max counts!')
+        print('calculating max counts n = %d!' % ((n + 1),))
         ngram_keys = list(set([x for y in self.references_ngrams[n] for x in y]))
         thread_result = Threader(ngram_keys, self.tmp_get_reference_max_counts, show_tqdm=True).run()
         thread_result = np.array(thread_result)

@@ -115,46 +115,52 @@ class Mle(Gan):
         generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
         return
 
-    def init_real_trainng(self, data_loc=None, word_index_dict=None, index_word_dict=None,
-                          vocab_size=None, seq_len=None):
+    def init_real_trainng(self, data_loc=None, parser=None):
         from ...utils.text_process import text_precess, text_to_code
         from ...utils.text_process import get_tokenlized
         tokens = get_tokenlized(data_loc)
-        if data_loc is None:
-            self.sequence_length, self.vocab_size = seq_len, vocab_size
-            word_index_dict, index_word_dict = word_index_dict, index_word_dict
+        if parser is not None:
+            self.sequence_length, self.vocab_size = parser.max_length, parser.vocab.shape[0]
+            word_index_dict, index_word_dict = parser.vocab2id, parser.id2vocab,
+            self.start_token, self.end_token = parser.START_TOKEN_ID, parser.END_TOKEN_ID
+            import shutil
+            shutil.copy(data_loc, self.oracle_file)
+            print('parser set from outside!')
         else:
+            self.start_token, self.end_token = 0, 0
             self.sequence_length, self.vocab_size = text_precess(data_loc)
             dictionaries_name = data_loc.split('/')[-1].split('.')[0] + '_dictionaries'
             [word_index_dict, index_word_dict] = load_or_create_dictionary(tokens, self.saving_path, dictionaries_name)
+            with open(self.oracle_file, 'w') as outfile:
+                outfile.write(text_to_code(tokens, word_index_dict, self.sequence_length))
         generator = Generator(num_vocabulary=self.vocab_size, batch_size=self.batch_size, emb_dim=self.emb_dim,
                               hidden_dim=self.hidden_dim, sequence_length=self.sequence_length,
                               start_token=self.start_token)
         self.set_generator(generator)
 
-        gen_dataloader = DataLoader(batch_size=self.batch_size, seq_length=self.sequence_length)
+        gen_dataloader = DataLoader(batch_size=self.batch_size, seq_length=self.sequence_length,
+                                    end_token=self.end_token)
         oracle_dataloader = None
         dis_dataloader = None
 
         self.set_data_loader(gen_loader=gen_dataloader, dis_loader=dis_dataloader, oracle_loader=oracle_dataloader)
-        with open(self.oracle_file, 'w') as outfile:
-            outfile.write(text_to_code(tokens, word_index_dict, self.sequence_length))
         return word_index_dict, index_word_dict
 
-    def train_real(self, data_loc=None):
+    def train_real(self, data_loc=None, wrapper_ref=None):
         from ...utils.text_process import code_to_text
         from ...utils.text_process import get_tokenlized
-        wi_dict, iw_dict = self.init_real_trainng(data_loc)
+        if wrapper_ref is None:
+            wi_dict, iw_dict = self.init_real_trainng(data_loc)
+        else:
+            self.wrapper = wrapper_ref
+            wi_dict, iw_dict = self.wrapper.parser.vocab2id, self.wrapper.parser.id2vocab
+        self.init_real_metric()
 
         def get_real_test_file(dict=iw_dict):
             with open(self.generator_file, 'r') as file:
                 codes = get_tokenlized(self.generator_file)
             with open(self.test_file, 'w') as outfile:
-                outfile.write(code_to_text(codes=codes, dictionary=dict))
-
-        self.sess.run(tf.global_variables_initializer())
-        self.sess.run(tf.local_variables_initializer())
-        self.load_generator_discriminator()
+                outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=len(iw_dict) - 1))
 
         self.pre_epoch_num = 80
         self.adversarial_epoch_num = 100

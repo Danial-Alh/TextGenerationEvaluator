@@ -37,6 +37,7 @@ def init_sess():
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
+    sess.run(tf.local_variables_initializer())
     return sess
 
 

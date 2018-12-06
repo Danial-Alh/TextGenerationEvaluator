@@ -1,3 +1,16 @@
+import os
+from multiprocessing.pool import Pool
+
+import nltk
+from nltk.translate.bleu_score import ngrams
+from tqdm import tqdm
+
+
+def tokenize(lines):
+    if isinstance(lines, str):
+        return nltk.word_tokenize(lines)
+    return Threader(lines, nltk.word_tokenize).run()
+
 class Ngram:
     def __init__(self, n):
         self.n = n

@@ -1,20 +1,30 @@
+import json
 import os
 import pickle
+import zipfile
+from zipfile import ZipFile
 
 import numpy as np
 
 from path_configs import DATASET_PATH, OBJ_fILES_PATH
 
 
-def read_text(file_name):
-    with open(DATASET_PATH + file_name + '.txt', 'r', encoding='utf8') as file:
+def read_text(file_name, is_complete_path=False):
+    if not is_complete_path:
+        path = DATASET_PATH + file_name + '.txt'
+    else:
+        path = file_name
+    with open(path, 'r', encoding='utf8') as file:
         lines = file.readlines()
     lines = [l.replace('\n', '') for l in lines if l.strip() != '']
     return np.array(lines)
 
 
-def write_text(lines, file_name):
-    path = DATASET_PATH + file_name + '.txt'
+def write_text(lines, file_name, is_complete_path=False):
+    if not is_complete_path:
+        path = DATASET_PATH + file_name + '.txt'
+    else:
+        path = file_name
     with open(path, 'w', encoding='utf8') as file:
         file.write("\n".join(lines))
     print('data written to file %s!' % file_name)
@@ -37,6 +47,42 @@ def load(file_name):
 
 def is_folder_empty(folder_path):
     return not exists(folder_path, '') or (len(os.listdir(folder_path)) == 0)
+
+
+def zip_folder(zipping_path, zipped_file_name, destination):
+    zipping_path = os.path.abspath(zipping_path)
+    zipped_file_path = destination + ('' if destination.endswith('/') else '/') + zipped_file_name + '.zip'
+    with ZipFile(zipped_file_path, 'w', compression=zipfile.ZIP_BZIP2) as compressor:
+        for root, dirs, files in os.walk(zipping_path):
+            for file in files:
+                file_abs_path = os.path.join(root, file)
+                compressor.write(file_abs_path, arcname=file_abs_path[len(zipping_path):])
+    return zipped_file_path
+
+
+def unzip_file(zipped_file_name, zipped_file_parent_path, extraction_path):
+    zipped_file_path = zipped_file_parent_path + ('' if zipped_file_parent_path.endswith('/') else '/') + \
+                       zipped_file_name + '.zip'
+    with ZipFile(zipped_file_path, 'r') as extractor:
+        extractor.extractall(extraction_path)
+
+
+def create_folder_if_not_exists(paths):
+    def create(p):
+        if not os.path.exists(p):
+            os.makedirs(p)
+
+    if isinstance(paths, str):
+        create(paths)
+        return
+    for p in paths:
+        create(p)
+
+
+def dump_json(obj, file_name, parent_path):
+    path = os.path.join(parent_path, file_name) + '.json'
+    with open(path, 'w') as file:
+        json.dump(obj, file, indent='\t')
 
 
 class PersistentClass:

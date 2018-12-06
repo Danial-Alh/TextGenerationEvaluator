@@ -371,7 +371,7 @@ class Bleu():  # this class speedup computation when reference is same for multi
                            self.smoothing_function, self.auto_reweigh)
 
     def get_reference_max_counts(self, n):
-        print('calculating max counts!')
+        print('calculating max counts n = %d!' % ((n + 1),))
         ngram_keys = list(set([x for y in self.references_ngrams[n] for x in y]))
         return dict(zip(ngram_keys, Threader(ngram_keys, self.tmp_get_reference_max_counts, show_tqdm=True).run()))
 
