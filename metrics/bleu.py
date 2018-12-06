@@ -363,7 +363,7 @@ class Bleu():  # this class speedup computation when reference is same for multi
         self.reference_max_counts = [self.get_reference_max_counts(n) for n in range(self.max_n)]
 
     def get_score(self, samples):
-        return Threader(samples, self.tmp_get_score, self.process_num, show_tqdm=True).run()
+        return Threader(samples, self.tmp_get_score, self.process_num, show_tqdm=False).run()
 
     def tmp_get_score(self, item):
         return corpus_bleu(self.references, item,

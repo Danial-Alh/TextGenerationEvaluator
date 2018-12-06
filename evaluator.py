@@ -28,7 +28,9 @@ class Evaluator:
         id_format_valid_tokenized = tokenize(read_text(self.valid_loc, True))
         valid_texts = self.data_manager.get_parser().id_format2line(id_format_valid_tokenized, True)
         valid_tokens = tokenize(valid_texts)
-        self.bleu = Bleu(valid_tokens)
+        self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3.)
+        self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4.)
+        self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
 
 
 class ModelDumper:
@@ -37,8 +39,12 @@ class ModelDumper:
         self.model = model
         self.evaluator = evaluator
         self.name = name
-        self.best_history = {'bleu': {"value": 0.0, "epoch": -1},
-                             '-nll': {"value": -np.inf, "epoch": -1}}
+        self.best_history = {
+            'bleu3': [{"value": 0.0, "epoch": -1}],
+            'bleu4': [{"value": 0.0, "epoch": -1}],
+            'bleu5': [{"value": 0.0, "epoch": -1}],
+            '-nll': [{"value": -np.inf, "epoch": -1}]
+        }
         self.n_sampling = 1000
 
         self.init_paths()
@@ -65,15 +71,19 @@ class ModelDumper:
             print('K%d - model "%s", epoch -, last iter model saved!' % (self.k, self.model.get_name()))
             return
         new_samples = tokenize(self.model.generate_samples(self.n_sampling))
-        new_scores = {'bleu': np.mean(self.evaluator.bleu.get_score(new_samples)),
-                      '-nll': float(self.model.get_nll())}
+        new_scores = {
+            'bleu3': np.mean(self.evaluator.bleu3.get_score(new_samples)),
+            'bleu4': np.mean(self.evaluator.bleu4.get_score(new_samples)),
+            'bleu5': np.mean(self.evaluator.bleu5.get_score(new_samples)),
+            '-nll': -float(self.model.get_nll())
+        }
 
         for key, new_v in new_scores.items():
-            if self.best_history[key]['value'] < new_v:
+            if self.best_history[key][-1]['value'] < new_v:
                 print('K%d - model "%s", epoch %d, found better score for "%s": %.4f' %
                       (self.k, self.model.get_name(), epoch, key, new_v))
                 self.store_better_model(key)
-                self.best_history[key] = {"value": new_v, "epoch": epoch}
+                self.best_history[key].append({"value": new_v, "epoch": epoch})
                 dump_json(self.best_history, 'best_history', self.saving_path)
 
 
@@ -83,13 +93,13 @@ if __name__ == '__main__':
     k_fold = 3
     m_name = sys.argv[1]
     dataset_name = sys.argv[2]
+    k = int(sys.argv[3])
+    # k = 1
     dm_name = dataset_name.split('-')[0]
     dm = SentenceDataManager([SentenceDataloader(dataset_name)], dm_name + '-words', k_fold=k_fold)
 
-    for k in range(k_fold):
-        ev = Evaluator(dm, k, dm_name)
-        m = TexyGen(m_name, dm.get_parser())
-        dumper = ModelDumper(m, ev, k, dm_name)
-        # m.train()
-        dumper.update_scores()
-        m.delete()
+    ev = Evaluator(dm, k, dm_name)
+    m = TexyGen(m_name, dm.get_parser())
+    dumper = ModelDumper(m, ev, k, dm_name)
+    m.train()
+    # m.delete()
