@@ -4,7 +4,7 @@ from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager
 from file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json
 from metrics.bleu import Bleu
-from models import BaseModel, TexyGen
+from models import BaseModel, TexyGen, LeakGan
 from path_configs import MODEL_PATH
 from utils import tokenize
 
@@ -45,7 +45,7 @@ class ModelDumper:
             'bleu5': [{"value": 0.0, "epoch": -1}],
             '-nll': [{"value": -np.inf, "epoch": -1}]
         }
-        self.n_sampling = 1000
+        self.n_sampling = 5000
 
         self.init_paths()
         self.model.set_dumper(self)
@@ -62,8 +62,8 @@ class ModelDumper:
     def restore_model(self, key):
         self.model.delete_saved_model()
         unzip_file(key, self.saving_path, self.model.get_saving_path())
-        self.model.load()
         print('K%d - "%s" based "%s" saved model restored' % (self.k, key, self.model.get_name()))
+        self.model.load()
 
     def update_scores(self, epoch=0, last_iter=False):
         if last_iter:
@@ -77,6 +77,7 @@ class ModelDumper:
             'bleu5': np.mean(self.evaluator.bleu5.get_score(new_samples)),
             '-nll': -float(self.model.get_nll())
         }
+        print(new_scores)
 
         for key, new_v in new_scores.items():
             if self.best_history[key][-1]['value'] < new_v:
@@ -99,7 +100,10 @@ if __name__ == '__main__':
     dm = SentenceDataManager([SentenceDataloader(dataset_name)], dm_name + '-words', k_fold=k_fold)
 
     ev = Evaluator(dm, k, dm_name)
-    m = TexyGen(m_name, dm.get_parser())
+
+    if m_name == 'leakgan':
+        m = LeakGan(dm.get_parser())
+    else:
+        m = TexyGen(m_name, dm.get_parser())
     dumper = ModelDumper(m, ev, k, dm_name)
     m.train()
-    # m.delete()

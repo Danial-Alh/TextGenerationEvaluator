@@ -11,6 +11,25 @@ class BaseModel:
         self.dumper = None
         pass
 
+    def update_scores(self, epoch_num):
+        print('evaluator called %d!' % epoch_num)
+        assert self.dumper is not None, 'Evaluator is none!'
+        self.dumper.update_scores(epoch_num)
+
+    def set_dumper(self, dumper):
+        self.dumper = dumper
+
+    def set_train_val_loc(self, train_loc, valid_loc):
+        self.train_loc = train_loc
+        self.valid_loc = valid_loc
+
+    def delete_saved_model(self):
+        import os, shutil
+        if os.path.exists(self.get_saving_path()):
+            shutil.rmtree(self.get_saving_path())
+            os.mkdir(self.get_saving_path())
+            print("saved model at %s deleted!" % self.get_saving_path())
+
     def train(self):
         pass
 
@@ -20,20 +39,8 @@ class BaseModel:
     def get_nll(self, data_loc=None):
         pass
 
-    def update_scores(self, epoch_num):
-        print('evaluator called %d!' % epoch_num)
-        assert self.dumper is not None, 'Evaluator is none!'
-        self.dumper.update_scores(epoch_num)
-
     def delete(self):
-        pass
-
-    def set_dumper(self, dumper):
-        self.dumper = dumper
-
-    def set_train_val_loc(self, train_loc, valid_loc):
-        self.train_loc = train_loc
-        self.valid_loc = valid_loc
+        tf.reset_default_graph()
 
     def get_saving_path(self):
         pass
@@ -43,13 +50,6 @@ class BaseModel:
 
     def load(self):
         pass
-
-    def delete_saved_model(self):
-        import os, shutil
-        if os.path.exists(self.get_saving_path()):
-            shutil.rmtree(self.get_saving_path())
-            os.mkdir(self.get_saving_path())
-            print("saved model at %s deleted!" % self.get_saving_path())
 
 
 class TexyGen(BaseModel):
@@ -131,11 +131,6 @@ class TexyGen(BaseModel):
             inll = self.init_nll(data_loc, self)
         return inll.get_score()
 
-    def delete(self):
-        # self.model.sess.close()
-        # self.model.sess.reset()
-        tf.reset_default_graph()
-
     def get_saving_path(self):
         return self.model.saving_path
 
@@ -146,6 +141,61 @@ class TexyGen(BaseModel):
         self.model.sess.run(tf.global_variables_initializer())
         self.model.sess.run(tf.local_variables_initializer())
         self.model.load_generator_discriminator()
+
+
+class LeakGan(BaseModel):
+    def __init__(self, parser: Parser):
+        super().__init__()
+        import previous_works.leakgan2.Main as leakgan2main
+        self.parser = parser
+        self.model_module = leakgan2main
+
+    def set_train_val_loc(self, train_loc, valid_loc):
+        super().set_train_val_loc(train_loc, valid_loc)
+        with open(train_loc) as ref:
+            with open(self.model_module.positive_file, 'w') as trg:
+                trg.write(''.join(ref.readlines()))
+        self.valid_data_loader = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
+        self.valid_data_loader.create_batches(valid_loc)
+        self.model = self.model_module.LeakGanMain(self, self.parser)
+
+    def train(self):
+        self.model.train()
+        self.dumper.update_scores(last_iter=True)
+
+    def generate_samples(self, n_samples, with_beam_search=False):
+        codes = self.model.generate_samples(n_samples, self.model_module.dummy_file, 0)
+
+        print('%d samples generated!' % len(codes))
+
+        samples = self.parser.id_format2line(codes, True)
+        write_text(samples, self.model_module.dummy_file, True)
+        print('codes converted to text format and written in file %s.' % self.model_module.dummy_file)
+        return samples
+
+    def get_nll(self, data_loc=None):
+        if data_loc is None or data_loc == self.valid_loc:
+            dl = self.valid_data_loader
+        else:
+            dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
+            dl.create_batches(data_loc)
+        return self.model.target_loss(dl)
+
+    def get_saving_path(self):
+        return self.model_module.model_path
+
+    def get_name(self):
+        return 'leakgan2'
+
+    def load(self):
+        self.model.sess.run(tf.local_variables_initializer())
+        self.model.sess.run(tf.global_variables_initializer())
+        model_path = tf.train.latest_checkpoint(self.get_saving_path())
+        if model_path is not None:
+            self.model.saver.restore(self.model.sess, model_path)
+            print(model_path + ' found!')
+        else:
+            print('Model not found. Randomly initialized!')
 
 
 if __name__ == '__main__':
@@ -159,7 +209,7 @@ if __name__ == '__main__':
     # m_name = 'leakgan'
     # m_name = 'rankgan'
     m_name = 'textgan'
-    m = TexyGen(m_name, tr_loc, valid_loc, dm.get_parser())
+    m = TexyGen(m_name, dm.get_parser())
     # m.train()
     print(m.get_nll(None))
     print(m.generate_samples(64))
