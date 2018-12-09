@@ -1,9 +1,8 @@
-import tensorflow as tf
-
 from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager
 from data_management.parsers import Parser
-from file_handler import write_text
+from file_handler import write_text, read_text
+from utils import tokenize
 
 
 class BaseModel:
@@ -40,6 +39,7 @@ class BaseModel:
         pass
 
     def delete(self):
+        import tensorflow as tf
         tf.reset_default_graph()
 
     def get_saving_path(self):
@@ -84,11 +84,12 @@ class TexyGen(BaseModel):
         self.train_loc = None
         self.valid_loc = None
         self.parser = parser
-        self.model = gans[gan_name.lower()]()
+        self.model_class = gans[gan_name.lower()]
         self.dataloader_class = dls[gan_name.lower()]
 
     def set_train_val_loc(self, train_loc, valid_loc):
         super().set_train_val_loc(train_loc, valid_loc)
+        self.model = self.model_class()
         self.model.init_real_trainng(train_loc, self.parser)
         self.valid_nll = self.init_nll(valid_loc)
         self.load()
@@ -132,12 +133,13 @@ class TexyGen(BaseModel):
         return inll.get_score()
 
     def get_saving_path(self):
-        return self.model.saving_path
+        return self.model_class.saving_path
 
     def get_name(self):
-        return self.model.__class__.__name__
+        return self.model_class.__name__
 
     def load(self):
+        import tensorflow as tf
         self.model.sess.run(tf.global_variables_initializer())
         self.model.sess.run(tf.local_variables_initializer())
         self.model.load_generator_discriminator()
@@ -188,6 +190,7 @@ class LeakGan(BaseModel):
         return 'leakgan2'
 
     def load(self):
+        import tensorflow as tf
         self.model.sess.run(tf.local_variables_initializer())
         self.model.sess.run(tf.global_variables_initializer())
         model_path = tf.train.latest_checkpoint(self.get_saving_path())
@@ -198,18 +201,50 @@ class LeakGan(BaseModel):
             print('Model not found. Randomly initialized!')
 
 
+class TextGan(BaseModel):
+    def __init__(self, parser: Parser):
+        super().__init__()
+        self.parser = parser
+
+    def set_train_val_loc(self, train_loc, valid_loc):
+        from previous_works.textgan2.textGAN import TextGANMMD
+        import numpy as np
+        train_data = np.array(tokenize(read_text(train_loc, True)))[:, :-1]
+        valid_data = np.array(tokenize(read_text(valid_loc, True)))[:, :-1]
+        self.model = TextGANMMD(self, self.parser, train_data, valid_data)
+
+    def train(self):
+        self.model.train_func()
+        self.dumper.update_scores(last_iter=True)
+
+    def generate_samples(self, n_samples, with_beam_search=False):
+        codes = self.model.generate()
+        samples = self.parser.id_format2line(codes, True)
+        # write_text(samples, self.model_module.dummy_file, True)
+        # print('codes converted to text format and written in file %s.' % self.model_module.dummy_file)
+        return samples
+
+    def get_nll(self, data_loc=None):
+        return 0.0
+
+    def delete(self):
+        super().delete()
+
+    def get_saving_path(self):
+        super().get_saving_path()
+
+    def get_name(self):
+        return 'textgan2'
+
+    def load(self):
+        super().load()
+
+
 if __name__ == '__main__':
-    dm = SentenceDataManager([SentenceDataloader('coco-train')], 'coco-words')
-    train_data = dm.get_training_data(0, unpack=True)
-    valid_data = dm.get_validation_data(0, unpack=True)
-    tr_loc = dm.dump_unpacked_data_on_file(train_data, 'coco-train-k0')
-    valid_loc = dm.dump_unpacked_data_on_file(valid_data, 'coco-valid-k0')
-    # m_name = 'seqgan'
-    # m_name = 'maligan'
-    # m_name = 'leakgan'
-    # m_name = 'rankgan'
-    m_name = 'textgan'
-    m = TexyGen(m_name, dm.get_parser())
-    # m.train()
-    print(m.get_nll(None))
-    print(m.generate_samples(64))
+    dm = SentenceDataManager([SentenceDataloader('coco-train')], 'coco-words', k_fold=3)
+    # train_data = dm.get_training_data(0, unpack=True)
+    # valid_data = dm.get_validation_data(0, unpack=True)
+    # tr_loc = dm.dump_unpacked_data_on_file(train_data, 'coco-train-k0')
+    # valid_loc = dm.dump_unpacked_data_on_file(valid_data, 'coco-valid-k0')
+    # m = TextGANMMD(dm.get_parser(), train_data, valid_data)
+    # m.train_func()

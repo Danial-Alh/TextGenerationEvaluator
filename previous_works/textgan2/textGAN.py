@@ -6,31 +6,22 @@ TextGAN
 """
 ## 152.3.214.203/6006
 
+import inspect
 import os
+
+CURR_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/'
 
 GPUID = 1
 os.environ['CUDA_VISIBLE_DEVICES'] = str(GPUID)
 
-import tensorflow as tf
-from tensorflow.contrib import learn
-from tensorflow.contrib import layers
 # from tensorflow.contrib import metrics
 # from tensorflow.contrib.learn import monitors
-from tensorflow.contrib import framework
-from tensorflow.contrib.learn.python.learn import learn_runner
-from tensorflow.python.platform import tf_logging as logging
 # from tensorflow.contrib.learn.python.learn.metric_spec import MetricSpec
-import cPickle
-import numpy as np
-import os
-import scipy.io as sio
-from math import floor
-import pdb
 
 from .model import *
-from .utils import prepare_data_for_cnn, prepare_data_for_rnn, get_minibatches_idx, normalizing, restore_from_save, \
-    prepare_for_bleu, cal_BLEU, sent2idx, _clip_gradients_seperate_norm
+from .utils import prepare_data_for_cnn, get_minibatches_idx, restore_from_save, _clip_gradients_seperate_norm
 from .denoise import *
+from tensorflow.python.platform import tf_logging as logging
 
 profile = False
 # import tempfile
@@ -47,7 +38,7 @@ FLAGS = flags.FLAGS
 
 
 class Options(object):
-    def __init__(self):
+    def __init__(self, v_size, mx_len):
         self.dis_steps = 10
         self.gen_steps = 1
         self.fix_emb = False
@@ -64,8 +55,8 @@ class Options(object):
         self.W_emb = None
         self.cnn_W = None
         self.cnn_b = None
-        self.maxlen = 41
-        self.n_words = 4391
+        self.maxlen = mx_len
+        self.n_words = v_size
         self.filter_shape = 5
         self.filter_size = 300
         self.multiplier = 2
@@ -91,9 +82,12 @@ class Options(object):
         self.decay_rate = 0.99
         self.relu_w = False
 
-        self.save_path = "./save/" + "bird_" + str(self.n_gan) + "_dim_" + self.model + "_" + self.substitution + str(
-            self.permutation)
-        self.log_path = "./log"
+        self.save_path = os.path.join(CURR_PATH,
+                                      "./save/" + "bird_" + str(self.n_gan) +
+                                      "_dim_" + self.model + "_" + self.substitution + str(self.permutation))
+        self.log_path = os.path.join(CURR_PATH, "./log")
+        self.text_path = os.path.join(CURR_PATH, "./text")
+        if not os.path.exists(self.text_path): os.mkdir(self.text_path)
         self.print_freq = 10
         self.valid_freq = 100
         self.sigma_range = [2]
@@ -208,8 +202,9 @@ def textGAN(x, opt):
     tf.summary.scalar('G_loss', G_loss)
     summaries = [
         "learning_rate",
-        "G_loss",
-        "D_loss"
+        "loss",
+        # "G_loss",
+        # "D_loss"
         # "gradients",
         # "gradient_norm",
     ]
@@ -220,8 +215,7 @@ def textGAN(x, opt):
               var.name.startswith('pretrain')]
     d_vars = [var for var in all_vars if
               var.name.startswith('d_')]
-    print[g.name
-    for g in g_vars]
+    print([g.name for g in g_vars])
     generator_op = layers.optimize_loss(
         G_loss,
         global_step=global_step,
@@ -258,172 +252,158 @@ def textGAN(x, opt):
     return res_, G_loss, D_loss, generator_op, discriminator_op
 
 
-def run_model(opt, train, val, ixtoword):
-    try:
-        params = np.load('./param_g.npz')
-        if params['Wemb'].shape == (opt.n_words, opt.embed_size):
-            print('Use saved embedding.')
-            opt.W_emb = params['Wemb']
-        else:
-            print('Emb Dimension mismatch: param_g.npz:' + str(params['Wemb'].shape) + ' opt: ' + str(
-                (opt.n_words, opt.embed_size)))
-            opt.fix_emb = False
-    except IOError:
-        print('No embedding file found.')
-        opt.fix_emb = False
+class TextGANMMD:
+    def __init__(self, wrapper, parser, train_data, valid_data):
+        self.wrapper = wrapper
+        self.train = train_data
+        self.val = valid_data
+        self.ixtoword = parser.id2vocab
+        self.opt = Options(parser.vocab.shape[0], parser.max_length)
+        try:
+            params = np.load(os.path.join(CURR_PATH, './param_g.npz'))
+            if params['Wemb'].shape == (self.opt.n_words, self.opt.embed_size):
+                print('Use saved embedding.')
+                self.opt.W_emb = params['Wemb']
+            else:
+                print('Emb Dimension mismatch: param_g.npz:' + str(params['Wemb'].shape) + ' opt: ' + str(
+                    (self.opt.n_words, self.opt.embed_size)))
+                self.opt.fix_emb = False
+        except IOError:
+            print('No embedding file found.')
+            self.opt.fix_emb = False
 
-    with tf.device('/gpu:1'):
-        x_ = tf.placeholder(tf.int32, shape=[opt.batch_size, opt.sent_len])
-        x_org_ = tf.placeholder(tf.int32, shape=[opt.batch_size, opt.sent_len])
-        is_train_ = tf.placeholder(tf.bool, name='is_train_')
-        res_, g_loss_, d_loss_, gen_op, dis_op = textGAN(x_, opt)
-        merged = tf.summary.merge_all()
-        # opt.is_train = False
-        # res_val_, loss_val_, _ = auto_encoder(x_, x_org_, opt)
-        # merged_val = tf.summary.merge_all()
+        with tf.device('/gpu:1'):
+            self.x_ = tf.placeholder(tf.int32, shape=[self.opt.batch_size, self.opt.sent_len])
+            self.x_org_ = tf.placeholder(tf.int32, shape=[self.opt.batch_size, self.opt.sent_len])
+            self.is_train_ = tf.placeholder(tf.bool, name='is_train_')
+            self.res_, self.g_loss_, self.d_loss_, self.gen_op, self.dis_op = textGAN(self.x_, self.opt)
+            self.merged = tf.summary.merge_all()
+            # self.opt.is_train = False
+            # res_val_, loss_val_, _ = auto_encoder(x_, x_org_, self.opt)
+            # merged_val = tf.summary.merge_all()
 
-    # tensorboard --logdir=run1:/tmp/tensorflow/ --port 6006
-    # writer = tf.train.SummaryWriter(opt.log_path, graph=tf.get_default_graph())
+        # tensorboard --logdir=run1:/tmp/tensorflow/ --port 6006
+        # writer = tf.train.SummaryWriter(self.opt.log_path, graph=tf.get_default_graph())
 
-    uidx = 0
-    config = tf.ConfigProto(log_device_placement=False, allow_soft_placement=True,
-                            graph_options=tf.GraphOptions(build_cost_model=1))
-    # config = tf.ConfigProto(device_count={'GPU':0})
-    config.gpu_options.per_process_gpu_memory_fraction = 0.4
-    np.set_printoptions(precision=3)
-    np.set_printoptions(threshold=np.inf)
-    saver = tf.train.Saver()
+        self.uidx = 0
+        config = tf.ConfigProto(log_device_placement=False, allow_soft_placement=True,
+                                graph_options=tf.GraphOptions(build_cost_model=1))
+        # config = tf.ConfigProto(device_count={'GPU':0})
+        config.gpu_options.per_process_gpu_memory_fraction = 0.4
+        np.set_printoptions(precision=3)
+        np.set_printoptions(threshold=np.inf)
+        self.saver = tf.train.Saver()
 
-    run_metadata = tf.RunMetadata()
+        self.run_metadata = tf.RunMetadata()
 
-    with tf.Session(config=config) as sess:
-        train_writer = tf.summary.FileWriter(opt.log_path + '/train', sess.graph)
-        test_writer = tf.summary.FileWriter(opt.log_path + '/test', sess.graph)
-        sess.run(tf.global_variables_initializer())
-        if opt.restore:
+        self.sess = tf.Session(config=config)
+        self.train_writer = tf.summary.FileWriter(self.opt.log_path + '/train', self.sess.graph)
+        self.test_writer = tf.summary.FileWriter(self.opt.log_path + '/test', self.sess.graph)
+        self.sess.run(tf.global_variables_initializer())
+        if self.opt.restore:
             try:
                 # pdb.set_trace()
 
                 t_vars = tf.trainable_variables()
                 # print([var.name[:-2] for var in t_vars])
-                loader = restore_from_save(t_vars, sess, opt)
-
+                self.loader = restore_from_save(t_vars, self.sess, self.opt)
 
             except Exception as e:
                 print(e)
                 print("No saving session, using random initialization")
-                sess.run(tf.global_variables_initializer())
+                self.sess.run(tf.global_variables_initializer())
 
-        for epoch in range(opt.max_epochs):
+    def train_func(self):
+        for epoch in range(self.opt.max_epochs):
             print("Starting epoch %d" % epoch)
             # if epoch >= 10:
             #     print("Relax embedding ")
-            #     opt.fix_emb = False
-            #     opt.batch_size = 2
-            kf = get_minibatches_idx(len(train), opt.batch_size, shuffle=True)
+            #     self.opt.fix_emb = False
+            #     self.opt.batch_size = 2
+            kf = get_minibatches_idx(len(self.train), self.opt.batch_size, shuffle=True)
             for _, train_index in kf:
-                uidx += 1
-                sents = [train[t] for t in train_index]
+                self.uidx += 1
+                sents = [self.train[t] for t in train_index]
 
-                sents_permutated = add_noise(sents, opt)
+                sents_permutated = add_noise(sents, self.opt)
 
                 # sents[0] = np.random.permutation(sents[0])
-                x_batch = prepare_data_for_cnn(sents_permutated, opt)  # Batch L
+                x_batch = prepare_data_for_cnn(sents_permutated, self.opt)  # Batch L
                 d_loss = 0
                 g_loss = 0
                 if profile:
-                    if uidx % opt.dis_steps == 0:
-                        _, d_loss = sess.run([dis_op, d_loss_], feed_dict={x_: x_batch},
-                                             options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-                                             run_metadata=run_metadata)
-                    if uidx % opt.gen_steps == 0:
-                        _, g_loss = sess.run([gen_op, g_loss_], feed_dict={x_: x_batch},
-                                             options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-                                             run_metadata=run_metadata)
+                    if self.uidx % self.opt.dis_steps == 0:
+                        _, d_loss = self.sess.run([self.dis_op, self.d_loss_], feed_dict={self.x_: x_batch},
+                                                  options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+                                                  run_metadata=self.run_metadata)
+                    if self.uidx % self.opt.gen_steps == 0:
+                        _, g_loss = self.sess.run([self.gen_op, self.g_loss_], feed_dict={self.x_: x_batch},
+                                                  options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+                                                  run_metadata=self.run_metadata)
                 else:
-                    if uidx % opt.dis_steps == 0:
-                        _, d_loss = sess.run([dis_op, d_loss_], feed_dict={x_: x_batch})
-                    if uidx % opt.gen_steps == 0:
-                        _, g_loss = sess.run([gen_op, g_loss_], feed_dict={x_: x_batch})
+                    if self.uidx % self.opt.dis_steps == 0:
+                        _, d_loss = self.sess.run([self.dis_op, self.d_loss_], feed_dict={self.x_: x_batch})
+                    if self.uidx % self.opt.gen_steps == 0:
+                        _, g_loss = self.sess.run([self.gen_op, self.g_loss_], feed_dict={self.x_: x_batch})
 
-                if uidx % opt.valid_freq == 0:
+                if self.uidx % self.opt.valid_freq == 0:
                     is_train = True
-                    valid_index = np.random.choice(len(val), opt.batch_size)
-                    val_sents = [val[t] for t in valid_index]
+                    valid_index = np.random.choice(len(self.val), self.opt.batch_size)
+                    val_sents = [self.val[t] for t in valid_index]
 
-                    val_sents_permutated = add_noise(val_sents, opt)
+                    val_sents_permutated = add_noise(val_sents, self.opt)
 
-                    x_val_batch = prepare_data_for_cnn(val_sents_permutated, opt)
+                    x_val_batch = prepare_data_for_cnn(val_sents_permutated, self.opt)
 
-                    d_loss_val = sess.run(d_loss_, feed_dict={x_: x_val_batch})
-                    g_loss_val = sess.run(g_loss_, feed_dict={x_: x_val_batch})
+                    d_loss_val = self.sess.run(self.d_loss_, feed_dict={self.x_: x_val_batch})
+                    g_loss_val = self.sess.run(self.g_loss_, feed_dict={self.x_: x_val_batch})
 
-                    res = sess.run(res_, feed_dict={x_: x_val_batch})
+                    res = self.sess.run(self.res_, feed_dict={self.x_: x_val_batch})
                     print("Validation d_loss %f, g_loss %f  mean_dist %f" % (d_loss_val, g_loss_val, res['mean_dist']))
-                    print
-                    "Sent:" + u' '.join([ixtoword[x] for x in res['syn_sent'][0] if x != 0]).encode('utf-8').strip()
+                    print("Sent: " + ' '.join([self.ixtoword[str(x)] for x in res['syn_sent'][0] if x != 0]).strip())
                     print("MMD loss %f, GAN loss %f" % (res['mmd'], res['gan']))
-                    np.savetxt('./text/rec_val_words.txt', res['syn_sent'], fmt='%i', delimiter=' ')
-                    if opt.discrimination:
+                    np.savetxt(os.path.join(CURR_PATH, './text/rec_val_words.txt'),
+                               res['syn_sent'], fmt='%i', delimiter=' ')
+                    if self.opt.discrimination:
                         print("Real Prob %f Fake Prob %f" % (res['prob_r'], res['prob_f']))
 
-                    val_set = [prepare_for_bleu(s) for s in val_sents]
-                    [bleu2s, bleu3s, bleu4s] = cal_BLEU([prepare_for_bleu(s) for s in res['syn_sent']], {0: val_set})
-                    print
-                    'Val BLEU (2,3,4): ' + ' '.join([str(round(it, 3)) for it in (bleu2s, bleu3s, bleu4s)])
+                    # val_set = [prepare_for_bleu(s) for s in val_sents]
+                    # [bleu2s, bleu3s, bleu4s] = cal_BLEU([prepare_for_bleu(s) for s in res['syn_sent']], {0: val_set})
+                    # print
+                    # 'Val BLEU (2,3,4): ' + ' '.join([str(round(it, 3)) for it in (bleu2s, bleu3s, bleu4s)])
 
-                    summary = sess.run(merged, feed_dict={x_: x_val_batch})
-                    test_writer.add_summary(summary, uidx)
+                    summary = self.sess.run(self.merged, feed_dict={self.x_: x_val_batch})
+                    self.test_writer.add_summary(summary, self.uidx)
 
-                if uidx % opt.print_freq == 0:
+                if self.uidx % self.opt.print_freq == 0:
                     # pdb.set_trace()
-                    res = sess.run(res_, feed_dict={x_: x_batch})
+                    res = self.sess.run(self.res_, feed_dict={self.x_: x_batch})
                     median_dis = np.sqrt(
                         np.median([((x - y) ** 2).sum() for x in res['real_f'] for y in res['real_f']]))
                     print("Iteration %d: d_loss %f, g_loss %f, mean_dist %f, realdist median %f" % (
-                    uidx, d_loss, g_loss, res['mean_dist'], median_dis))
-                    np.savetxt('./text/rec_train_words.txt', res['syn_sent'], fmt='%i', delimiter=' ')
-                    print
-                    "Sent:" + u' '.join([ixtoword[x] for x in res['syn_sent'][0] if x != 0]).encode('utf-8').strip()
+                        self.uidx, d_loss, g_loss, res['mean_dist'], median_dis))
+                    np.savetxt(os.path.join(CURR_PATH, './text/rec_train_words.txt')
+                               , res['syn_sent'], fmt='%i', delimiter=' ')
+                    print("Sent: " + ' '.join([self.ixtoword[str(x)] for x in res['syn_sent'][0] if x != 0]).strip())
+                    self.saver.save(self.sess, self.opt.save_path, global_step=epoch)
+                    self.wrapper.update_scores(self.uidx)
 
-                    summary = sess.run(merged, feed_dict={x_: x_batch})
-                    train_writer.add_summary(summary, uidx)
+                    summary = self.sess.run(self.merged, feed_dict={self.x_: x_batch})
+                    self.train_writer.add_summary(summary, self.uidx)
                     # print res['x_rec'][0][0]
                     # print res['x_emb'][0][0]
                     if profile:
                         tf.contrib.tfprof.model_analyzer.print_model_analysis(
                             tf.get_default_graph(),
-                            run_meta=run_metadata,
+                            run_meta=self.run_metadata,
                             tfprof_options=tf.contrib.tfprof.model_analyzer.PRINT_ALL_TIMING_MEMORY)
 
-            saver.save(sess, opt.save_path, global_step=epoch)
+            self.saver.save(self.sess, self.opt.save_path, global_step=epoch)
+        self.wrapper.update_scores(self.uidx)
 
-
-def main():
-    # global n_words
-    # Prepare training and testing data
-    # loadpath = "./data/three_corpus_small.p"
-    loadpath = "./real_cotra.txt"
-    x = np.loadtxt(loadpath)
-    train, val = x[:88550], x[88550:]
-    ixtoword, _ = cPickle.load(open('vocab_cotra.pkl', 'rb'))
-    ixtoword = {i: x for i, x in enumerate(ixtoword)}
-    opt = Options()
-
-    print
-    dict(opt)
-    print('Total words: %d' % opt.n_words)
-
-    run_model(opt, train, val, ixtoword)
-
-    # model_fn = auto_encoder
-    # ae = learn.Estimator(model_fn=model_fn)
-    # ae.fit(train, opt , steps=opt.max_epochs)
-
-
-#
-# def main(argv=None):
-#     learn_runner.run(experiment_fn, FLAGS.train_dir)
-
-if __name__ == '__main__':
-    main()
+    def generate(self):
+        # x_val_batch = prepare_data_for_cnn(self.val, self.opt)
+        res = self.sess.run(self.res_['syn_sent'])
+        np.savetxt(os.path.join(CURR_PATH, './text/rec_val_words.txt'),
+                   res, fmt='%i', delimiter=' ')
+        return [list(map(lambda oo: str(oo), o)) for o in res]

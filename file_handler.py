@@ -85,6 +85,12 @@ def dump_json(obj, file_name, parent_path):
         json.dump(obj, file, indent='\t')
 
 
+def load_json(file_name, parent_path):
+    path = os.path.join(parent_path, file_name) + '.json'
+    with open(path, 'r') as file:
+        return json.load(file)
+
+
 class PersistentClass:
     SUCCESSFUL_LOAD = 0
     FAILED_LOAD = 1

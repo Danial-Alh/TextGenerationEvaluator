@@ -1,4 +1,4 @@
-import cPickle
+import pickle
 import pdb
 import os
 import glob
@@ -7,7 +7,7 @@ data_Name = "cotra"
 vocab_file = "./vocab_" + data_Name + ".pkl"
 input_file = './text/rec_train_words.txt'
 
-word, vocab = cPickle.load(open('./' + vocab_file))
+word, vocab = pickle.load(open('./' + vocab_file))
 # input_file = 'save/coco_451.txt'
 output_file = './text/sents/rec_train_sents.txt'
 with open(output_file, 'w')as fout:

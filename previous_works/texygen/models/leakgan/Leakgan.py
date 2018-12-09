@@ -1,12 +1,8 @@
-from time import time
-
 from ...models.Gan import Gan
 from ...models.leakgan.LeakganDataLoader import DataLoader, DisDataloader
 from ...models.leakgan.LeakganDiscriminator import Discriminator
 from ...models.leakgan.LeakganGenerator import Generator
 from ...models.leakgan.LeakganReward import Reward
-from ...utils.metrics.Bleu import Bleu
-from ...utils.metrics.EmbSim import EmbSim
 from ...utils.metrics.Nll import Nll
 from ...utils.oracle.OracleLstm import OracleLstm
 from ...utils.text_process import load_or_create_dictionary
@@ -50,6 +46,12 @@ def generate_samples_gen(sess, trainable_model, batch_size, generated_num, outpu
 
 
 class Leakgan(Gan):
+    from ...models.leakgan import SAVING_PATH
+    saving_path = SAVING_PATH
+    oracle_file = saving_path + 'oracle.txt'
+    generator_file = saving_path + 'generator.txt'
+    test_file = saving_path + 'test_file.txt'
+
     def __init__(self, oracle=None):
         super().__init__()
         # you can change parameters, generator here
@@ -73,12 +75,6 @@ class Leakgan(Gan):
         self.start_token = 0
         self.dis_embedding_dim = 64
         self.goal_size = 16
-
-        from ...models.leakgan import SAVING_PATH
-        self.saving_path = SAVING_PATH
-        self.oracle_file = self.saving_path + 'oracle.txt'
-        self.generator_file = self.saving_path + 'generator.txt'
-        self.test_file = self.saving_path + 'test_file.txt'
 
     def init_oracle_trainng(self, oracle=None):
         goal_out_size = sum(self.num_filters)

@@ -1,13 +1,10 @@
 import json
-from time import time
 
 from ...models.Gan import Gan
 from ...models.gsgan.GsganDataLoader import DataLoader, DisDataloader
 from ...models.gsgan.GsganDiscriminator import Discriminator
 from ...models.gsgan.GsganGenerator import Generator
-from ...utils.metrics.Bleu import Bleu
 from ...utils.metrics.Cfg import Cfg
-from ...utils.metrics.EmbSim import EmbSim
 from ...utils.metrics.Nll import Nll
 from ...utils.oracle.OracleCfg import OracleCfg
 from ...utils.oracle.OracleLstm import OracleLstm
@@ -16,6 +13,12 @@ from ...utils.utils import *
 
 
 class Gsgan(Gan):
+    from ...models.gsgan import SAVING_PATH
+    saving_path = SAVING_PATH
+    oracle_file = saving_path + 'oracle.txt'
+    generator_file = saving_path + 'generator.txt'
+    test_file = saving_path + 'test_file.txt'
+
     def __init__(self, oracle=None):
         super().__init__()
         # you can change parameters, generator here
@@ -30,12 +33,6 @@ class Gsgan(Gan):
         self.batch_size = 64
         self.generate_num = 128
         self.start_token = 0
-
-        from ...models.gsgan import SAVING_PATH
-        self.saving_path = SAVING_PATH
-        self.oracle_file = self.saving_path + 'oracle.txt'
-        self.generator_file = self.saving_path + 'generator.txt'
-        self.test_file = self.saving_path + 'test_file.txt'
 
     def init_oracle_trainng(self, oracle=None):
         if oracle is None:
@@ -268,7 +265,7 @@ class Gsgan(Gan):
 
     def init_real_trainng(self, data_loc=None):
         from ...utils.text_process import text_precess, text_to_code
-        from ...utils.text_process import get_tokenlized, get_word_list, get_dict
+        from ...utils.text_process import get_tokenlized
         if data_loc is None:
             data_loc = 'data/old_image_coco.txt'
         self.sequence_length, self.vocab_size = text_precess(data_loc)

@@ -184,7 +184,7 @@ def evaluate_msJaccard(reference_file, test_files: list, n_gram=3):
         model_name = test_file.split('/')[-2]
         print('model: {}'.format(model_name))
         tests = get_tokenlized(test_file)
-        score = metric.jaccard(tests)
+        score = metric.get_score(tests)
         print(score)
         print('metric evaluated!')
         scores[model_name] = score

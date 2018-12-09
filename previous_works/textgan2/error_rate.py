@@ -39,8 +39,8 @@ def _edit_distance_matrix(y, y_hat, special_tokens=None):
     dist[1:, 0] = insertion_cost.cumsum()
     dist[0, 1:] = deletion_cost.cumsum()
 
-    for i in xrange(1, len(y) + 1):
-        for j in xrange(1, len(y_hat) + 1):
+    for i in range(1, len(y) + 1):
+        for j in range(1, len(y_hat) + 1):
             if y[i - 1] != y_hat[j - 1]:
                 cost = 1
             else:
@@ -81,8 +81,8 @@ def _bleu(y, y_hat, n=4):
 
     # count reference ngrams
     ref_counts = defaultdict(int)
-    for k in xrange(1, n + 1):
-        for i in xrange(len(y) - k + 1):
+    for k in range(1, n + 1):
+        for i in range(len(y) - k + 1):
             ref_counts[tuple(y[i:i + k])] += 1
 
     # for each partial sequence, 1) compute addition to # of correct
@@ -91,8 +91,8 @@ def _bleu(y, y_hat, n=4):
     ref_len = len(y)
     pred_counts = defaultdict(int)
     correct = numpy.zeros(4)
-    for i in xrange(1, len(y_hat) + 1):
-        for k in xrange(i, max(-1, i - n), -1):
+    for i in range(1, len(y_hat) + 1):
+        for k in range(i, max(-1, i - n), -1):
             # print i, k
             ngram = tuple(y_hat[k - 1:i])
             # UNK token hack. Must work for both indices
@@ -105,7 +105,7 @@ def _bleu(y, y_hat, n=4):
 
         # compute partial bleu score
         bleu = 1.
-        for j in xrange(n):
+        for j in range(n):
             possible = max(0, i - j)
             bleu *= float(correct[j] + 1.) / (possible + 1.)
             bleu_scores[i - 1, j] = bleu ** (1. / (j + 1))

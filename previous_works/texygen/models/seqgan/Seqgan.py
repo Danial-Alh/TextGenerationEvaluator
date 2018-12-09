@@ -14,6 +14,12 @@ from ...utils.utils import *
 
 
 class Seqgan(Gan):
+    from ...models.seqgan import SAVING_PATH
+    saving_path = SAVING_PATH
+    oracle_file = saving_path + 'oracle.txt'
+    generator_file = saving_path + 'generator.txt'
+    test_file = saving_path + 'test_file.txt'
+
     def __init__(self, oracle=None):
         super().__init__()
         # you can change parameters, generator here
@@ -28,12 +34,6 @@ class Seqgan(Gan):
         self.batch_size = 64
         self.generate_num = 128
         self.start_token = 0
-
-        from ...models.seqgan import SAVING_PATH
-        self.saving_path = SAVING_PATH
-        self.oracle_file = self.saving_path + 'oracle.txt'
-        self.generator_file = self.saving_path + 'generator.txt'
-        self.test_file = self.saving_path + 'test_file.txt'
 
     def init_metric(self):
         nll = Nll(data_loader=self.oracle_data_loader, rnn=self.oracle, sess=self.sess)

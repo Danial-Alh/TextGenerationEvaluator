@@ -346,7 +346,7 @@ def brevity_penalty(closest_ref_len, hyp_len):
 class Bleu():  # this class speedup computation when reference is same for multisample
     # Base on https://www.nltk.org/_modules/nltk/translate/bleu_score.html
     def __init__(self, references, weights=np.ones(3) / 3., smoothing_function=SmoothingFunction().method1,
-                 auto_reweigh=False, process_num=None):
+                 auto_reweigh=False, process_num=None, cached_fields=None):
         self.references = references
         self.weights = weights
         self.smoothing_function = smoothing_function
@@ -357,15 +357,33 @@ class Bleu():  # this class speedup computation when reference is same for multi
         else:
             self.process_num = process_num
 
-        self.ref_lens = list(len(reference) for reference in references)
-        self.references_ngrams = [get_ngrams(references, n + 1) for n in range(self.max_n)]
-        self.references_counts = [[Counter(l) for l in self.references_ngrams[n]] for n in range(self.max_n)]
-        self.reference_max_counts = [self.get_reference_max_counts(n) for n in range(self.max_n)]
+        print('bleu{} init!'.format(self.max_n))
+        if cached_fields is None:
+            self.ref_lens = list(len(reference) for reference in references)
+            self.references_ngrams = [get_ngrams(references, n + 1) for n in range(self.max_n)]
+            self.references_counts = [[Counter(l) for l in self.references_ngrams[n]] for n in range(self.max_n)]
+            self.reference_max_counts = [self.get_reference_max_counts(n) for n in range(self.max_n)]
+        else:
+            ref_lens, \
+            references_ngrams, \
+            references_counts, \
+            reference_max_counts = cached_fields
+            self.ref_lens = ref_lens[:self.max_n]
+            self.references_ngrams = references_ngrams[:self.max_n]
+            self.references_counts = references_counts[:self.max_n]
+            self.reference_max_counts = reference_max_counts[:self.max_n]
 
-    def get_score(self, samples, compute_in_parallel=False):
+    def get_cached_fields(self):
+        return self.ref_lens, \
+               self.references_ngrams, \
+               self.references_counts, \
+               self.reference_max_counts
+
+    def get_score(self, samples, compute_in_parallel=True):
+        print('evaluating bleu {}!'.format(self.max_n))
         if compute_in_parallel:
-            return Threader(samples, self.tmp_get_score, self.process_num, show_tqdm=False).run()
-        return [self.tmp_get_score(sample) for sample in samples]
+            return np.mean(Threader(samples, self.tmp_get_score, self.process_num, show_tqdm=False).run())
+        return np.mean([self.tmp_get_score(sample) for sample in samples])
 
     def tmp_get_score(self, item):
         return corpus_bleu(self.references, item,
@@ -376,6 +394,7 @@ class Bleu():  # this class speedup computation when reference is same for multi
         print('calculating max counts n = %d!' % ((n + 1),))
         ngram_keys = list(set([x for y in self.references_ngrams[n] for x in y]))
         return dict(zip(ngram_keys, Threader(ngram_keys, self.tmp_get_reference_max_counts, show_tqdm=True).run()))
+        # return dict(zip(ngram_keys, multi_run(ngram_keys, self.tmp_get_reference_max_counts, show_tqdm=True)))
 
     def tmp_get_reference_max_counts(self, ngram):
         counts = [x.get(ngram, 0) for x in self.references_counts[len(ngram) - 1]]

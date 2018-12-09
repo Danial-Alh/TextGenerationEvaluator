@@ -3,29 +3,22 @@ Yizhe Zhang
 
 Main model file
 """
+import numpy as np
 import tensorflow as tf
-from tensorflow.contrib import learn
 from tensorflow.contrib import layers
-from tensorflow.contrib import metrics
 # from tensorflow.contrib.learn import monitors
-from tensorflow.contrib import framework
-from tensorflow.contrib.learn.python.learn import learn_runner
-from tensorflow.python.platform import tf_logging as logging
-from tensorflow.contrib.learn.python.learn.metric_spec import MetricSpec
-from tensorflow.contrib.legacy_seq2seq import rnn_decoder, embedding_rnn_decoder, sequence_loss, embedding_rnn_seq2seq, \
-    embedding_tied_rnn_seq2seq
-import pdb
-import copy
-from .utils import normalizing, lrelu
+from tensorflow.contrib.legacy_seq2seq import sequence_loss
 from tensorflow.python.framework import ops
 from tensorflow.python.layers import core as layers_core
 from tensorflow.python.ops import nn_ops, math_ops, embedding_ops, variable_scope, array_ops
+
+from . import data_utils as dp
+from .utils import normalizing
+
+
 # from tensorflow.contrib.seq2seq.python.ops import beam_search_decoder
 # from tensorflow.contrib.seq2seq.python.ops import beam_search_ops
 # from tensorflow.contrib.seq2seq.python.ops import decoder
-
-from . import data_utils as dp
-from pdb import set_trace as bp
 
 
 def embedding(features, opt, prefix='', is_reuse=None):

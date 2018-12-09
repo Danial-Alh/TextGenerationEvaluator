@@ -11,6 +11,7 @@ def tokenize(lines):
         return nltk.word_tokenize(lines)
     return Threader(lines, nltk.word_tokenize).run()
 
+
 class Ngram:
     def __init__(self, n):
         self.n = n
@@ -29,29 +30,36 @@ def get_ngrams(sentences, n, use_pool_thread=True):
 
 
 class Threader:
-    def __init__(self, items, function, proc_num=None, show_tqdm=False):
+
+    def __init__(self, items, func, proc_num=None, show_tqdm=False):
         self.items = items
-        self.function = function
+        self.func = func
         self.show_tqdm = show_tqdm
-        if proc_num is None:
-            proc_num = os.cpu_count()
-        self.proc_num = proc_num
-        self.pool = Pool(proc_num)
         self.total_size = len(items)
-        self.batch_size = int(self.total_size / proc_num)
+        self.proc_num = proc_num
+        if proc_num is None:
+            self.proc_num = os.cpu_count()
+        self.pool = Pool(self.proc_num)
+        self.batch_size = int(self.total_size / self.proc_num)
         if self.batch_size == 0:
             self.batch_size = 1
 
     def run(self):
+        import time
         handles = list()
         for i in range(self.proc_num):
+            time.sleep(.2)
             handles.append(self.pool.apply_async(self.dummy_splitter, args=(i,)))
+
+        time.sleep(3)
 
         results = []
         for r in handles:
             results.extend(r.get())
         self.pool.close()
+        self.pool.terminate()
         self.pool.join()
+        del self.pool
         return results
 
     def dummy_splitter(self, n):
@@ -63,8 +71,8 @@ class Threader:
             return []
         sub_items = self.items[curr_slice]
         if self.show_tqdm:
-            return [self.function(item) for item in tqdm(sub_items)]
-        return [self.function(item) for item in sub_items]
+            return [self.func(item) for item in tqdm(sub_items)]
+        return [self.func(item) for item in sub_items]
 
     def __getstate__(self):
         self_dict = self.__dict__.copy()

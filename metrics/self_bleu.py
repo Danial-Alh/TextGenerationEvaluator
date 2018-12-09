@@ -4,7 +4,6 @@ from copy import deepcopy
 
 import numpy as np
 from nltk.translate.bleu_score import SmoothingFunction
-from tqdm import tqdm
 
 from metrics.bleu import corpus_bleu
 from utils import get_ngrams, Threader
@@ -13,7 +12,7 @@ from utils import get_ngrams, Threader
 class SelfBleu():  # this class speedup computation when reference is same for multisample
     # Base on https://www.nltk.org/_modules/nltk/translate/bleu_score.html
     def __init__(self, references, weights=np.ones(3) / 3., smoothing_function=SmoothingFunction().method1,
-                 auto_reweigh=False, process_num=None):
+                 auto_reweigh=False, process_num=None, cached_fields=None):
         self.references = references
         self.weights = weights
         self.smoothing_function = smoothing_function
@@ -24,15 +23,37 @@ class SelfBleu():  # this class speedup computation when reference is same for m
         else:
             self.process_num = process_num
 
-        self.ref_lens = list(len(reference) for reference in references)
-        self.references_ngrams = [get_ngrams(references, n + 1) for n in range(self.max_n)]
-        self.references_counts = [[Counter(l) for l in self.references_ngrams[n]] for n in range(self.max_n)]
-        tmp_counts = [self.get_reference_max_counts(n) for n in range(self.max_n)]
-        self.reference_max_counts, self.reference_max2_counts = [t[0] for t in tmp_counts], [t[1] for t in tmp_counts]
+        print('self-bleu{} init!'.format(self.max_n))
+        if cached_fields is None:
+            self.ref_lens = list(len(reference) for reference in references)
+            self.references_ngrams = [get_ngrams(references, n + 1) for n in range(self.max_n)]
+            self.references_counts = [[Counter(l) for l in self.references_ngrams[n]] for n in range(self.max_n)]
+            tmp_counts = [self.get_reference_max_counts(n) for n in range(self.max_n)]
+            self.reference_max_counts, self.reference_max2_counts = \
+                [t[0] for t in tmp_counts], [t[1] for t in tmp_counts]
+        else:
+            ref_lens, \
+            references_ngrams, \
+            references_counts, \
+            reference_max_counts, \
+            reference_max2_counts = cached_fields
+            self.ref_lens = ref_lens[:self.max_n]
+            self.references_ngrams = references_ngrams[:self.max_n]
+            self.references_counts = references_counts[:self.max_n]
+            self.reference_max_counts = reference_max_counts[:self.max_n]
+            self.reference_max2_counts = reference_max2_counts[:self.max_n]
+
+    def get_cached_fields(self):
+        return self.ref_lens, \
+               self.references_ngrams, \
+               self.references_counts, \
+               self.reference_max_counts, \
+               self.reference_max2_counts
 
     def get_score(self):
+        print('evaluating self-bleu {}!'.format(self.max_n))
         ref_max_counts = deepcopy(self.reference_max_counts)
-        return [self.tmp_get_score(ref_max_counts, i) for i in range(len(self.references))]
+        return np.mean([self.tmp_get_score(ref_max_counts, i) for i in range(len(self.references))])
 
     def tmp_get_score(self, ref_max_counts, i):
         item = self.references[i]

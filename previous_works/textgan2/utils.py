@@ -49,7 +49,7 @@ def prepare_data_for_cnn(seqs_x, opt):
     x = []
     for rev in seqs_x:
         xx = []
-        for i in xrange(pad):
+        for i in range(pad):
             xx.append(0)
         for idx in rev:
             xx.append(idx)
@@ -113,8 +113,8 @@ def restore_from_save(t_vars, sess, opt):
         #     if var.name[:-2] in ss:
         #         tf.assign(t_vars, save_keys[var.name[:-2]])
         loader = tf.train.Saver(var_list=[var for var in t_vars if var.name in ss_right_shape])
-        loader.restore(sess, opt.save_path)
         print("Loading variables from '%s'." % opt.save_path)
+        loader.restore(sess, opt.save_path)
         print("Loaded variables:" + str(ss_right_shape))
         # pdb.set_trace()
 
@@ -187,7 +187,7 @@ def prepare_data_for_cnn(seqs_x, opt):
     x = []
     for rev in seqs_x:
         xx = []
-        for i in xrange(pad):
+        for i in range(pad):
             xx.append(0)
         for idx in rev:
             xx.append(idx)

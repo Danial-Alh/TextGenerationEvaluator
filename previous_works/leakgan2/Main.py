@@ -272,7 +272,8 @@ class LeakGanMain:
             if total_batch % 10 == 1 or total_batch == TOTAL_BATCH - 1:
                 self.generate_samples(generated_num, CURRENT_PATH + "./save/coco_" + str(total_batch) + ".txt",
                                       0)
-                self.saver.save(self.sess, model_path + '/leakgan', global_step=total_batch)
+                # self.saver.save(self.sess, model_path + '/leakgan', global_step=total_batch)
+                self.saver.save(self.sess, model_path + '/leakgan')
                 self.dumper.update_scores(PRE_EPOCH_NUM + total_batch)
 
             if total_batch % 15 == 0:
