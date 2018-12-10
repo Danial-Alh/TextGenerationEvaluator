@@ -299,6 +299,13 @@ class LeakGAN(object):
                 tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.vocab_size]), 1e-20, 1.0)
             )
         ) / (self.sequence_length * self.batch_size)
+        self.selfdefined_persample_len_ll = \
+            tf.reshape(
+                tf.reduce_sum(
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.vocab_size, 1.0, 0.0) * \
+                    tf.log(tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.vocab_size]), 1e-20, 1.0)),
+                    axis=-1), self.x.shape)
+        self.selfdefined_persample_ll = tf.reduce_sum(self.selfdefined_persample_len_ll, axis=-1)
 
         with tf.name_scope("Worker_PreTrain_update"):
             # training updates
