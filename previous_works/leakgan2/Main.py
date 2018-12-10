@@ -49,7 +49,7 @@ dis_batch_size = 64
 #########################################################################################
 #  Basic Training Parameters
 #########################################################################################
-TOTAL_BATCH = 10
+TOTAL_BATCH = 800
 generated_num = 256
 CURRENT_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/'
 positive_file = os.path.join(CURRENT_PATH, './save/realtrain_cotra.txt')

@@ -1,6 +1,6 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
-import numpy as np
 
 from ...models.Gan import SavableModel
 
@@ -105,6 +105,12 @@ class Generator(SavableModel):
                 tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
             )
         ) / (self.sequence_length * self.batch_size)
+        self.selfdefined_persample_ll = \
+            tf.reshape(
+                tf.reduce_sum(
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * \
+                    tf.log(tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)),
+                    axis=-1), self.x.shape)
 
         # training updates
         pretrain_opt = self.g_optimizer(self.learning_rate)

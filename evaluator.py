@@ -6,8 +6,6 @@ from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager, OracleDataManager
 from file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
-from metrics.bleu import Bleu
-from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
 from models import BaseModel, TexyGen, LeakGan, TextGan
@@ -91,7 +89,7 @@ class ModelDumper:
             # 'bleu3': self.evaluator.bleu3.get_score(new_samples),
             # 'bleu4': self.evaluator.bleu4.get_score(new_samples),
             # 'bleu5': self.evaluator.bleu5.get_score(new_samples),
-            '-nll_oracle': self.evaluator.oracle.log_probability(new_samples),
+            '-nll_oracle': np.mean(self.evaluator.oracle.log_probability(new_samples)),
             '-nll': -float(self.model.get_nll())
         }
         print(new_scores)
@@ -253,6 +251,15 @@ def oracle_train(ds_name, dm_name, k=0):
     m.train()
 
 
+def store_parsed_validations(ds_name, dm_name):
+    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
+    for k in range(k_fold):
+        train_data = dm.get_training_data(k, unpack=True)
+        valid_data = dm.get_validation_data(k, unpack=True)
+        train_loc = dm.dump_unpacked_data_on_file(train_data, dm_name + '-train-k' + str(k), parse=True)
+        valid_loc = dm.dump_unpacked_data_on_file(valid_data, dm_name + '-valid-k' + str(k), parse=True)
+
+
 if __name__ == '__main__':
     import sys
 
@@ -264,6 +271,7 @@ if __name__ == '__main__':
     train = sys.argv[4] == 'train'
     sample = sys.argv[4] == 'sample'
     oracle = sys.argv[4] == 'oracle'
+    store_valid = sys.argv[4] == 'store_valid'
     # k = 1
     dataset_prefix_name = dataset_name.split('-')[0]
     if train:
@@ -272,5 +280,7 @@ if __name__ == '__main__':
         oracle_train(dataset_name, dataset_prefix_name, input_k)
     elif sample:
         final_sampling(dataset_name, dataset_prefix_name, input_k, 20000)
+    elif store_valid:
+        store_parsed_validations(dataset_name, dataset_prefix_name)
     else:
         final_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)

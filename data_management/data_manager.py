@@ -132,11 +132,15 @@ class SentenceDataManager(DataManager):
     def get_parser(self) -> Parser:
         return self.parsers[0]
 
-    def dump_unpacked_data_on_file(self, unpacked_data, file_name):
-        # text = unpacked_data[0] # unshifted text
+    def dump_unpacked_data_on_file(self, unpacked_data, file_name, parse=False):
+        if parse:
+            file_name += '_parsed'
         text = unpacked_data[1]  # shifted text
-        text = [list(map(lambda x: str(x), l)) for l in text]
-        text = [" ".join(l) for l in text]
+        if parse:
+            text = self.get_parser().id_format2line(text, trim=True)
+        else:
+            text = [list(map(lambda x: str(x), l)) for l in text]
+            text = [" ".join(l) for l in text]
         return write_text(text, file_name)
 
 

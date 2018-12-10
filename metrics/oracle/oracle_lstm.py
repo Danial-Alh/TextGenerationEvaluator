@@ -55,7 +55,7 @@ class Oracle_LSTM(TARGET_LSTM):
             end_inx = start_inx + self.batch_size
             tmp = self.sess.run(self.out_loss, {self.x: new_inp[start_inx:end_inx]})
             res[start_inx:min(end_inx, inp_len)] = tmp[:min(end_inx, inp_len) - start_inx]
-
+        print(res.shape)
         return -1. * res
 
 
