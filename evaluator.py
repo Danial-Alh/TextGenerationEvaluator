@@ -3,11 +3,12 @@ import os
 import numpy as np
 
 from data_management.data_loaders import SentenceDataloader
-from data_management.data_manager import SentenceDataManager
+from data_management.data_manager import SentenceDataManager, OracleDataManager
 from file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
 from metrics.bleu import Bleu
 from metrics.ms_jaccard import MSJaccard
+from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
 from models import BaseModel, TexyGen, LeakGan, TextGan
 from path_configs import MODEL_PATH, EXPORT_PATH
@@ -34,14 +35,15 @@ class Evaluator:
         valid_texts = self.data_manager.get_parser().id_format2line(id_format_valid_tokenized, True)
         # valid_texts = list(np.random.choice(valid_texts, 1000, replace=False))
         valid_tokens = tokenize(valid_texts)
-        self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
-        self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
-        self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
-        self.bleu2 = Bleu(valid_tokens, weights=np.ones(2) / 2., cached_fields=self.bleu5.get_cached_fields())
-        self.jaccard5 = MSJaccard(valid_tokens, 5)
-        self.jaccard4 = MSJaccard(valid_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
-        self.jaccard3 = MSJaccard(valid_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
-        self.jaccard2 = MSJaccard(valid_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
+        # self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
+        # self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
+        # self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
+        # self.bleu2 = Bleu(valid_tokens, weights=np.ones(2) / 2., cached_fields=self.bleu5.get_cached_fields())
+        # self.jaccard5 = MSJaccard(valid_tokens, 5)
+        # self.jaccard4 = MSJaccard(valid_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
+        # self.jaccard3 = MSJaccard(valid_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
+        # self.jaccard2 = MSJaccard(valid_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
+        self.oracle = Oracle_LSTM()
 
 
 class ModelDumper:
@@ -52,9 +54,10 @@ class ModelDumper:
         self.name = name
         self.is_dummy = is_dummy
         self.best_history = {
-            'bleu3': [{"value": 0.0, "epoch": -1}],
-            'bleu4': [{"value": 0.0, "epoch": -1}],
-            'bleu5': [{"value": 0.0, "epoch": -1}],
+            # 'bleu3': [{"value": 0.0, "epoch": -1}],
+            # 'bleu4': [{"value": 0.0, "epoch": -1}],
+            # 'bleu5': [{"value": 0.0, "epoch": -1}],
+            '-nll_oracle': [{"value": -np.inf, "epoch": -1}],
             '-nll': [{"value": -np.inf, "epoch": -1}]
         }
         self.n_sampling = 5000
@@ -85,9 +88,10 @@ class ModelDumper:
             return
         new_samples = tokenize(self.model.generate_samples(self.n_sampling))
         new_scores = {
-            'bleu3': np.mean(self.evaluator.bleu3.get_score(new_samples)),
-            # 'bleu4': np.mean(self.evaluator.bleu4.get_score(new_samples)),
-            # 'bleu5': np.mean(self.evaluator.bleu5.get_score(new_samples)),
+            # 'bleu3': self.evaluator.bleu3.get_score(new_samples),
+            # 'bleu4': self.evaluator.bleu4.get_score(new_samples),
+            # 'bleu5': self.evaluator.bleu5.get_score(new_samples),
+            '-nll_oracle': self.evaluator.oracle.log_probability(new_samples),
             '-nll': -float(self.model.get_nll())
         }
         print(new_scores)
@@ -144,7 +148,8 @@ def final_evaluate(ds_name, dm_name, k=0, n_sampling=5000):
             dumper = ModelDumper(m, ev, k, dm_name, is_dummy=True)
 
             samples = tokenize(dumper.load_generated_samples(restore_type))
-            subsamples = list(np.random.choice(samples, 5000, replace=False))
+            subsamples_mask = np.random.choice(range(len(samples)), 5000, replace=False)
+            subsamples = np.array(samples)[subsamples_mask].tolist()
             # samples = subsamples
             print('subsampled to 5000!')
 
@@ -205,7 +210,7 @@ def final_sampling(ds_name, dm_name, k=0, n_sampling=5000):
                 continue
             if model_name == 'leakgan':
                 m = LeakGan(dm.get_parser())
-            elif model_name == 'textgan':
+            elif model_name == 'textgan2':
                 m = TextGan(dm.get_parser())
             else:
                 m = TexyGen(model_name, dm.get_parser())
@@ -225,7 +230,22 @@ def start_train(ds_name, dm_name, k=0):
 
     if m_name == 'leakgan':
         m = LeakGan(dm.get_parser())
-    elif m_name == 'textgan':
+    elif m_name == 'textgan2':
+        m = TextGan(dm.get_parser())
+    else:
+        m = TexyGen(m_name, dm.get_parser())
+    ModelDumper(m, ev, k, dm_name)
+    m.train()
+
+
+def oracle_train(ds_name, dm_name, k=0):
+    dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
+
+    ev = Evaluator(dm, k, dm_name)
+
+    if m_name == 'leakgan':
+        m = LeakGan(dm.get_parser())
+    elif m_name == 'textgan2':
         m = TextGan(dm.get_parser())
     else:
         m = TexyGen(m_name, dm.get_parser())
@@ -243,10 +263,13 @@ if __name__ == '__main__':
     input_k = int(sys.argv[3])
     train = sys.argv[4] == 'train'
     sample = sys.argv[4] == 'sample'
+    oracle = sys.argv[4] == 'oracle'
     # k = 1
     dataset_prefix_name = dataset_name.split('-')[0]
     if train:
         start_train(dataset_name, dataset_prefix_name, input_k)
+    elif oracle:
+        oracle_train(dataset_name, dataset_prefix_name, input_k)
     elif sample:
         final_sampling(dataset_name, dataset_prefix_name, input_k, 20000)
     else:

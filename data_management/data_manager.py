@@ -4,7 +4,7 @@ import numpy as np
 
 from data_management.batch_managers import BatchManager
 from data_management.data_loaders import SentenceDataloader
-from data_management.parsers import WordBasedParser, Parser
+from data_management.parsers import WordBasedParser, Parser, OracleBasedParser
 from file_handler import PersistentClass, write_text
 
 
@@ -34,7 +34,7 @@ class DataManager(PersistentClass):
     def load(self):
         result = super().load()
         if result == PersistentClass.SUCCESSFUL_LOAD:
-            self.parsers = [parser_class(None, self.parser_names[i])
+            self.parsers = [parser_class(lines=None, name=self.parser_names[i])
                             for i, parser_class in enumerate(self.parser_classes)]
         return result
 
@@ -82,7 +82,8 @@ class DataManager(PersistentClass):
         return batch_manager
 
     def _parse_data(self):
-        self.parsers = [parser_class(self._prepare_data_for_parser(i), self.parser_names[i])
+        self.parsers = [parser_class(lines=self._prepare_data_for_parser(i),
+                                     name=self.parser_names[i])
                         for i, parser_class in enumerate(self.parser_classes)]
         pass
 
@@ -94,11 +95,13 @@ class DataManager(PersistentClass):
 
 
 class SentenceDataManager(DataManager):
-    def __init__(self, data_loaders, parser_name, k_fold=3):
+    def __init__(self, data_loaders, parser_name, k_fold=3, concatenated_name='', parsers=None):
         data_loaders = data_loaders
-        parsers = [WordBasedParser]
+        if parsers is None:
+            parsers = [WordBasedParser]
         super().__init__(data_loaders, parsers, [parser_name], k_fold,
-                         concatenated_name='&'.join([dl.file_name for dl in data_loaders]))
+                         concatenated_name='&'.join(([concatenated_name] if concatenated_name != '' else []) +
+                                                    [dl.file_name for dl in data_loaders]))
 
     def _prepare_data_for_parser(self, parser_id):
         return list(self.data)
@@ -137,14 +140,31 @@ class SentenceDataManager(DataManager):
         return write_text(text, file_name)
 
 
+class OracleDataManager(SentenceDataManager):
+    def __init__(self, data_loaders, parser_name, k_fold=3):
+        data_loaders = data_loaders
+        parsers = [OracleBasedParser]
+        super().__init__(data_loaders, parsers=parsers, parser_name=parser_name, k_fold=k_fold, concatenated_name='')
+
+    def unpack_data(self, packed_data):
+        text, lengths = packed_data[:]['text'], packed_data[:]['len']
+
+        text = np.array([s for s in text])
+
+        text_shifted = np.concatenate(
+            (np.reshape([self.parsers[0].START_TOKEN_ID] * packed_data.shape[0], (packed_data.shape[0], 1)),
+             text[:, :-1]), axis=1)
+        return text_shifted, text, lengths
+
+
 if __name__ == '__main__':
     # dm = Seq2SeqDataManager([WordDataloader('words-shahnameh-golestan-ghazaliat')],
     #                         ['words'], 32)
-    dm = SentenceDataManager([SentenceDataloader('coco-train')], 'coco-words')
+    dm = OracleDataManager([SentenceDataloader('oracle37.5')], 'oracle-words')
     train_data = dm.get_training_data(0, unpack=True)
     valid_data = dm.get_validation_data(0, unpack=True)
-    tr_loc = dm.dump_unpacked_data_on_file(train_data, 'coco-train-k0')
-    valid_loc = dm.dump_unpacked_data_on_file(valid_data, 'coco-valid-k0')
+    tr_loc = dm.dump_unpacked_data_on_file(train_data, 'oracle37.5-train-k0')
+    valid_loc = dm.dump_unpacked_data_on_file(valid_data, 'oracle37.5-valid-k0')
     # train_data = dm.get_training_data(0, unpack=False)
     # valid_data = dm.get_validation_data(0, unpack=False)
     # batch_iter = dm.get_batches(valid_data, 32, 'valid')
