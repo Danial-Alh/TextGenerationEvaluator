@@ -51,6 +51,9 @@ class BaseModel:
     def load(self):
         pass
 
+    def get_persample_ll(self, data_loc=None):
+        pass
+
 
 class TexyGen(BaseModel):
 
@@ -125,12 +128,28 @@ class TexyGen(BaseModel):
         inll.set_name('nll-test-' + data_loc)
         return inll
 
+    def init_persample_ll(self, data_loc):
+        from previous_works.texygen.utils.metrics.ItemFetcher import ItemFetcher
+        dataloader = self.dataloader_class(batch_size=self.model.batch_size,
+                                           seq_length=self.model.sequence_length)
+        dataloader.create_batches(data_loc)
+
+        inll = ItemFetcher(data_loader=dataloader, rnn=self.model.generator,
+                           item_to_be_fetched=self.model.generator.selfdefined_persample_ll,
+                           sess=self.model.sess)
+        inll.set_name('persample_ll' + data_loc)
+        return inll
+
     def get_nll(self, data_loc=None):
         if data_loc is None or data_loc == self.valid_loc:
             inll = self.valid_nll
         else:
-            inll = self.init_nll(data_loc, self)
+            inll = self.init_nll(data_loc)
         return inll.get_score()
+
+    def get_persample_ll(self, data_loc=None):
+        ll = self.init_persample_ll(data_loc)
+        return ll.get_score()
 
     def get_saving_path(self):
         return self.model_class.saving_path
@@ -182,6 +201,11 @@ class LeakGan(BaseModel):
             dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
             dl.create_batches(data_loc)
         return self.model.target_loss(dl)
+
+    def get_persample_ll(self, data_loc=None):
+        dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
+        dl.create_batches(data_loc)
+        return self.model.per_sample_ll(dl)
 
     def get_saving_path(self):
         return self.model_module.model_path

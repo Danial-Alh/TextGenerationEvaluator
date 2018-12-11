@@ -321,6 +321,19 @@ class LeakGanMain:
             nll.append(loss)
         return np.mean(nll)
 
+    def per_sample_ll(self, data_loader):
+        # target_loss means the oracle negative log-likelihood tested with the oracle model "target_lstm"
+        # For more details, please see the Section 4 in https://arxiv.org/abs/1609.05473
+        nll = []
+        data_loader.reset_pointer()
+
+        for it in range(data_loader.num_batch):
+            batch = data_loader.next_batch()
+            loss = self.sess.run([self.leakgan.selfdefined_persample_ll],
+                                 {self.leakgan.x: batch, self.leakgan.drop_out: 1.0})
+            nll.append(loss)
+        return np.reshape(np.array(nll), (-1,))
+
 
 if __name__ == '__main__':
     dm = SentenceDataManager([SentenceDataloader('coco-train')], 'coco-words-1k', k_fold=1)

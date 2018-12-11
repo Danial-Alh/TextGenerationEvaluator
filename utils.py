@@ -6,10 +6,12 @@ from nltk.translate.bleu_score import ngrams
 from tqdm import tqdm
 
 
-def tokenize(lines):
+def tokenize(lines, compute_in_parallel=False):
     if isinstance(lines, str):
         return nltk.word_tokenize(lines)
-    return Threader(lines, nltk.word_tokenize).run()
+    if compute_in_parallel:
+        return Threader(lines, nltk.word_tokenize).run()
+    return [nltk.word_tokenize(l) for l in lines]
 
 
 class Ngram:

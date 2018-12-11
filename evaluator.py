@@ -111,6 +111,9 @@ class ModelDumper:
     def load_generated_samples(self, load_key):
         return read_text(os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
 
+    def get_generated_samples_path(self, load_key):
+        return os.path.join(self.saving_path, load_key + '_based_samples.txt')
+
 
 def final_evaluate(ds_name, dm_name, k=0, n_sampling=5000):
     file_name = 'evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
@@ -301,6 +304,127 @@ def start_train(ds_name, dm_name, k=0):
     m.train()
 
 
+def final_oracle_evaluate(ds_name, dm_name, k=0, n_sampling=12500):
+    file_name = 'oracle_evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
+    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
+    if os.path.exists(t_path):
+        all_scores = load_json(file_name, EXPORT_PATH)
+        print('saved score {} found!'.format(file_name))
+        all_scores[k] = all_scores[str(k)]
+        del all_scores[str(k)]
+    else:
+        all_scores = {k: {}}
+        print('saved score not found!')
+
+    dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
+    print(dm.get_parser().vocab.shape)
+    ev = Evaluator(dm, k, dm_name)
+
+    for restore_type in ['-nll_oracle', 'last_iter']:
+        restore_type_key = restore_type + ' restore type'
+        print(restore_type_key)
+        if restore_type_key not in all_scores[k]:
+            all_scores[k][restore_type + ' restore type'] = {}
+        for model_name in ['leakgan', 'seqgan', 'rankgan', 'maligan', 'mle']:
+            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
+            if model_name in all_scores[k][restore_type_key]:
+                print("{} model already evaluated!".format(model_name))
+                continue
+            if model_name == 'leakgan':
+                m = LeakGan(dm.get_parser())
+            elif model_name == 'textgan':
+                m = TextGan(dm.get_parser())
+            else:
+                m = TexyGen(model_name, dm.get_parser())
+            dumper = ModelDumper(m, ev, k, dm_name)
+            dumper.restore_model(restore_type)
+
+            valid_loc = ev.valid_loc
+            samples_loc = dumper.get_generated_samples_path(restore_type)
+            sample_lines = dumper.load_generated_samples(restore_type)
+            id_format_lines = np.array(dm.get_parser().line2id_format(sample_lines)[0])
+            print(id_format_lines.shape)
+            id_format_sample_loc = dm.dump_unpacked_data_on_file((None, id_format_lines, None),
+                                                                 dm_name +
+                                                                 '-temp_{}-{}-k'.format(model_name, restore_type) + str(
+                                                                     k), parse=False)
+
+            sample_tokens = tokenize(sample_lines)
+            sample_tokens = [[int(vv) for vv in v] for v in sample_tokens]
+            valid_tokens = tokenize(dm.get_parsed_unpacked_data(dm.get_validation_data(k=k, unpack=True)))
+            valid_tokens = [[int(vv) for vv in v] for v in valid_tokens][:len(sample_tokens)]
+
+            oracle_sample_prob = np.array(ev.oracle.log_probability(sample_tokens))
+            oracle_valid_prob = np.array(ev.oracle.log_probability(valid_tokens))
+            model_valid_prob = np.array(m.get_persample_ll(valid_loc))
+            model_sample_prob = np.array(m.get_persample_ll(id_format_sample_loc))
+
+            print('******shapes******')
+            print(oracle_sample_prob.shape)
+            print(oracle_valid_prob.shape)
+            print(model_valid_prob.shape)
+            print(model_sample_prob.shape)
+
+            from metrics.divergences import Bhattacharyya, Jeffreys
+            bhattacharyya = Bhattacharyya(oracle_valid_prob, model_valid_prob, oracle_sample_prob, model_sample_prob)
+            jeffreys = Jeffreys(oracle_valid_prob, model_valid_prob, oracle_sample_prob, model_sample_prob)
+
+            m.delete()
+            del m
+
+            scores = {
+                'lnp_fromp': float(np.mean(oracle_valid_prob)),
+                'lnp_fromq': float(np.mean(oracle_sample_prob)),
+                'lnq_fromp': float(np.mean(model_valid_prob)),
+                'lnq_fromq': float(np.mean(model_sample_prob)),
+                'bhattacharyya': float(bhattacharyya),
+                'jeffreys': float(jeffreys)
+            }
+            print(scores)
+            all_scores[k][restore_type + ' restore type'][model_name] = scores
+            dump_json(all_scores, file_name, EXPORT_PATH)
+
+
+def final_oracle_sampling(ds_name, dm_name, k=0, n_sampling=12500):
+    file_name = 'oracle_evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
+    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
+    if os.path.exists(t_path):
+        all_scores = load_json(file_name, EXPORT_PATH)
+        print('saved score {} found!'.format(file_name))
+        all_scores[k] = all_scores[str(k)]
+        del all_scores[str(k)]
+    else:
+        all_scores = {k: {}}
+        print('saved score not found!')
+
+    dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
+    ev = Evaluator(dm, k, dm_name, init_data=False)
+
+    for restore_type in ['-nll_oracle', 'last_iter']:
+        restore_type_key = restore_type + ' restore type'
+        print(restore_type_key)
+        if restore_type_key not in all_scores[k]:
+            all_scores[k][restore_type + ' restore type'] = {}
+        for model_name in ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']:
+            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
+            if model_name in all_scores[k][restore_type_key]:
+                print("{} model already sampled!".format(model_name))
+                continue
+            if model_name == 'leakgan':
+                m = LeakGan(dm.get_parser())
+            elif model_name == 'textgan2':
+                m = TextGan(dm.get_parser())
+            else:
+                m = TexyGen(model_name, dm.get_parser())
+            dumper = ModelDumper(m, ev, k, dm_name)
+            dumper.restore_model(restore_type)
+
+            samples = m.generate_samples(n_sampling)
+            dumper.store_generated_samples(samples, restore_type)
+            m.delete()
+            del m
+
+
 def oracle_train(ds_name, dm_name, k=0):
     dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
 
@@ -333,22 +457,34 @@ if __name__ == '__main__':
     m_name = sys.argv[1]
     dataset_name = sys.argv[2]
     input_k = int(sys.argv[3])
+
     train = sys.argv[4] == 'train'
     sample = sys.argv[4] == 'sample'
-    oracle = sys.argv[4] == 'oracle'
-    store_valid = sys.argv[4] == 'store_valid'
+    eval = sys.argv[4] == 'eval'
     eval_nll = sys.argv[4] == 'eval_nll'
-    # k = 1
+
+    oracle = sys.argv[4] == 'oracle'
+    sample_oracle = sys.argv[4] == 'sample_oracle'
+    eval_oracle = sys.argv[4] == 'eval_oracle'
+
+    store_valid = sys.argv[4] == 'store_valid'
+
     dataset_prefix_name = dataset_name.split('-')[0]
     if train:
         start_train(dataset_name, dataset_prefix_name, input_k)
     elif oracle:
         oracle_train(dataset_name, dataset_prefix_name, input_k)
+    elif sample_oracle:
+        final_oracle_sampling(dataset_name, dataset_prefix_name, input_k)
+    elif eval_oracle:
+        final_oracle_evaluate(dataset_name, dataset_prefix_name, input_k)
     elif sample:
         final_sampling(dataset_name, dataset_prefix_name, input_k, 20000)
     elif store_valid:
         store_parsed_validations(dataset_name, dataset_prefix_name)
     elif eval_nll:
         final_nll_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)
-    else:
+    elif eval:
         final_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)
+    else:
+        print('invalid input!!!')

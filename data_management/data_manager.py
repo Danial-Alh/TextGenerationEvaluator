@@ -143,6 +143,10 @@ class SentenceDataManager(DataManager):
             text = [" ".join(l) for l in text]
         return write_text(text, file_name)
 
+    def get_parsed_unpacked_data(self, unpacked_data):
+        text = unpacked_data[1]  # shifted text
+        text = self.get_parser().id_format2line(text, trim=True)
+        return text
 
 class OracleDataManager(SentenceDataManager):
     def __init__(self, data_loaders, parser_name, k_fold=3):
