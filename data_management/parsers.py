@@ -249,10 +249,10 @@ class CharacterBasedParser(Parser):
         super().__init__(lines, lambda x: [i for i in x], '', name=name)
 
 
-class WordBasedParser(Parser2):
-    def __init__(self, lines, max_len=None, name=''):
+class WordBasedParser(Parser):
+    def __init__(self, lines, name=''):
         import nltk
-        super().__init__(lines, nltk.word_tokenize, ' ', max_len=max_len, name=name)
+        super().__init__(lines, nltk.word_tokenize, ' ', name=name)
 
 
 class OracleBasedParser(Parser2):

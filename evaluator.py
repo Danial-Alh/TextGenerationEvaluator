@@ -181,6 +181,71 @@ def final_evaluate(ds_name, dm_name, k=0, n_sampling=5000):
             dump_json(all_scores, file_name, EXPORT_PATH)
 
 
+def final_nll_evaluate(ds_name, dm_name, k=0, n_sampling=5000):
+    file_name = 'evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
+    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
+    assert os.path.exists(t_path), 'other scores must be calculated first'
+    all_scores = load_json(file_name, EXPORT_PATH)
+    print('saved score {} found!'.format(file_name))
+    all_scores[k] = all_scores[str(k)]
+    del all_scores[str(k)]
+    print('evaluating nlls!!!!!!')
+
+    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
+    ev = Evaluator(dm, k, dm_name)
+
+    for restore_type in ['bleu3', 'bleu4', 'bleu5', 'last_iter']:
+        restore_type_key = restore_type + ' restore type'
+        print(restore_type_key)
+        assert restore_type_key in all_scores[k], 'all restore type scores must be calculated first'
+        for model_name in ['leakgan', 'seqgan', 'rankgan', 'maligan', 'mle']:
+            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
+            assert model_name in all_scores[k][restore_type_key], 'all model scores must be calculated first'
+            if model_name == 'leakgan':
+                m = LeakGan(dm.get_parser())
+            elif model_name == 'textgan':
+                m = TextGan(dm.get_parser())
+            else:
+                m = TexyGen(model_name, dm.get_parser())
+            dumper = ModelDumper(m, ev, k, dm_name)
+            dumper.restore_model(restore_type)
+
+            ll = float(-m.get_nll())
+            m.delete()
+            del m
+
+            scores = {
+                'bleu2': None,
+                'bleu3': None,
+                'bleu4': None,
+                'bleu5': None,
+                'jaccard5': None,
+                'jaccard4': None,
+                'jaccard3': None,
+                'jaccard2': None,
+                'self_bleu5': None,
+                'self_bleu4': None,
+                'self_bleu3': None,
+                'self_bleu2': None,
+                '-nll': ll
+            }
+            print(scores)
+            for key in scores:
+                assert key in all_scores[k][restore_type + ' restore type'][model_name], \
+                    'all metric scores must be calculated first'
+            if all_scores[k][restore_type + ' restore type'][model_name]['-nll'] != float('inf') and \
+                    all_scores[k][restore_type + ' restore type'][model_name]['-nll'] != float('-inf'):
+                # assert all_scores[k][restore_type + ' restore type'][model_name]['-nll'] == ll, \
+                print('previous nll found!!!!!!!!!!!!!!!!!!!!!!!')
+                print(
+                    'read nll doesn\'t match %.8f new, %.8f old' % \
+                    (ll, all_scores[k][restore_type + ' restore type'][model_name]['-nll']))
+            else:
+                print('previous nll not found!!!!!!!!!!!!!!!!!!!!!!!')
+            all_scores[k][restore_type + ' restore type'][model_name]['-nll'] = ll
+            dump_json(all_scores, file_name, EXPORT_PATH)
+
+
 def final_sampling(ds_name, dm_name, k=0, n_sampling=5000):
     file_name = 'evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
     t_path = os.path.join(EXPORT_PATH, file_name + '.json')
@@ -272,6 +337,7 @@ if __name__ == '__main__':
     sample = sys.argv[4] == 'sample'
     oracle = sys.argv[4] == 'oracle'
     store_valid = sys.argv[4] == 'store_valid'
+    eval_nll = sys.argv[4] == 'eval_nll'
     # k = 1
     dataset_prefix_name = dataset_name.split('-')[0]
     if train:
@@ -282,5 +348,7 @@ if __name__ == '__main__':
         final_sampling(dataset_name, dataset_prefix_name, input_k, 20000)
     elif store_valid:
         store_parsed_validations(dataset_name, dataset_prefix_name)
+    elif eval_nll:
+        final_nll_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)
     else:
         final_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)
