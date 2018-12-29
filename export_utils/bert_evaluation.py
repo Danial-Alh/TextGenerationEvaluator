@@ -1,7 +1,7 @@
 import json
 import os
 
-from metrics.FBD import FBD
+from metrics.fbd import FBD
 from path_configs import EXPORT_PATH
 
 res = {}

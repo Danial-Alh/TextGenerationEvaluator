@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""The main BERT model and related functions."""
+"""The main bert model and related functions."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -105,7 +105,7 @@ class BertConfig(object):
 
 
 class BertModel(object):
-    """BERT model ("Bidirectional Embedding Representations from a Transformer").
+    """bert model ("Bidirectional Embedding Representations from a Transformer").
 
     Example usage:
 

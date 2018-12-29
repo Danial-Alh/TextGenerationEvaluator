@@ -53,7 +53,7 @@ class SelfBleu():  # this class speedup computation when reference is same for m
     def get_score(self):
         print('evaluating self-bleu {}!'.format(self.max_n))
         ref_max_counts = deepcopy(self.reference_max_counts)
-        return np.mean([self.tmp_get_score(ref_max_counts, i) for i in range(len(self.references))])
+        return [self.tmp_get_score(ref_max_counts, i) for i in range(len(self.references))]
 
     def tmp_get_score(self, ref_max_counts, i):
         item = self.references[i]

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import linalg
 
-from metrics.BERT.extract_features import get_features
+from metrics.bert.extract_features import get_features
 
 
 # from https://github.com/bioinf-jku/TTUR/blob/master/fid.py
