@@ -4,11 +4,10 @@ import numpy as np
 
 from data_management.data_manager import SentenceDataManager, OracleDataManager
 from metrics.bleu import Bleu
-from metrics.fbd import FBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
-from the_new_models import BaseModel, TexyGen, LeakGan, TextGan
+from the_new_models import BaseModel, TexyGen, LeakGan, TextGan, DGSAN
 from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
 from utils.nltk_utils import tokenize
@@ -16,7 +15,9 @@ from utils.path_configs import MODEL_PATH, EXPORT_PATH
 
 
 def create_model(model_name, parser):
-    if model_name == 'leakgan':
+    if model_name == 'dgsan':
+        m = DGSAN(parser)
+    elif model_name == 'leakgan':
         m = LeakGan(parser)
     elif model_name == 'textgan':
         m = TextGan(parser)
@@ -281,8 +282,10 @@ class Dumper:
     def init_paths(self):
         self.saving_path = MODEL_PATH + self.dm_name + '/' + self.model.get_name() + ('_k%d/' % self.k)
         create_folder_if_not_exists(self.saving_path)
-        self.final_result_file_name = 'evaluations_{}k-fold_k{}_{}' \
-            .format(k_fold, self.k, self.dm_name)
+        self.final_result_parent_path = os.path.join(EXPORT_PATH, 'evaluations_{}k-fold_k{}_{}/' \
+                                                     .format(k_fold, self.k, self.dm_name))
+        create_folder_if_not_exists(self.final_result_parent_path)
+        self.final_result_file_name = self.model.get_name()
 
     def store_better_model(self, key):
         zip_folder(self.model.get_saving_path(), key, self.saving_path)
@@ -320,16 +323,18 @@ class Dumper:
         return result
 
     def dump_final_results(self, results, restore_type):
-        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore', EXPORT_PATH)
+        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def load_final_results(self, restore_type):
-        return load_json(self.final_result_file_name + '_' + restore_type + 'restore', EXPORT_PATH)
+        return load_json(self.final_result_file_name + '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def dump_final_results_details(self, results, restore_type):
-        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore_details', EXPORT_PATH)
+        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore_details',
+                  self.final_result_parent_path)
 
     def load_final_results_details(self, restore_type):
-        return load_json(self.final_result_file_name + '_' + restore_type + 'restore_details', EXPORT_PATH)
+        return load_json(self.final_result_file_name + '_' + restore_type + 'restore_details',
+                         self.final_result_parent_path)
 
 
 class BestModelTracker:
@@ -364,4 +369,4 @@ class BestModelTracker:
 
 
 k_fold = 3
-all_models = ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']
+all_models = ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan', 'dgsan']

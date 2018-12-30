@@ -12,7 +12,8 @@ parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate
                     required=True)
 parser.add_argument('-k', type=int, help='which fold to action be done', required=True)
 parser.add_argument('-m', '--models', type=str, help='model names', nargs='+', choices=['mle', 'textgan', 'rankgan',
-                                                                                       'leakgan', 'maligan', 'seqgan'])
+                                                                                        'leakgan', 'maligan', 'seqgan',
+                                                                                        'dgsan'])
 parser.add_argument('-r', '--restore', type=str, help='restore types', nargs='+')
 args = parser.parse_args()
 
