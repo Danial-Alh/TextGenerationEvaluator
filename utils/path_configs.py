@@ -3,7 +3,7 @@ import inspect
 
 import os
 
-ROOT_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '../'
+ROOT_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/../'
 
 DATA_PATH = ROOT_PATH + 'data/'
 MODEL_PATH = DATA_PATH + 'temp_models/'

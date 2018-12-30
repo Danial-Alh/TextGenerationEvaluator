@@ -1,6 +1,6 @@
 from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager
-from data_management.parsers import Parser
+from data_management.parsers import Parser2
 from utils.file_handler import write_text, delete_file
 from utils.path_configs import TEMP_PATH
 
@@ -8,6 +8,7 @@ from utils.path_configs import TEMP_PATH
 class BaseModel:
     def __init__(self):
         self.tracker = None
+        self.model = None
         pass
 
     def update_scores(self, epoch_num):
@@ -57,7 +58,7 @@ class BaseModel:
 
 class TexyGen(BaseModel):
 
-    def __init__(self, gan_name, parser: Parser):
+    def __init__(self, gan_name, parser: Parser2):
         from previous_works.texygen.models.leakgan.Leakgan import Leakgan
         from previous_works.texygen.models.leakgan.LeakganDataLoader import DataLoader as LeakganDL
         from previous_works.texygen.models.maligan_basic.Maligan import Maligan
@@ -95,10 +96,10 @@ class TexyGen(BaseModel):
             delete_file(self.train_loc)
 
     def set_train_val_data(self, train_data, valid_data):
-        train_data = [' '.join(l) for l in self.parser.line2id_format(train_data)]
-        valid_data = [' '.join(l) for l in self.parser.line2id_format(valid_data)]
+        train_data = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(train_data)[0]]
+        valid_data = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(valid_data)[0]]
         super().set_train_val_data(train_data, valid_data)
-        self.train_loc = write_text(train_data, self.get_name(), TEMP_PATH)
+        self.train_loc = write_text(train_data, self.get_name() + '_train', TEMP_PATH)
         self.model = self.model_class()
         self.model.init_real_trainng(self.train_loc, self.parser)
         self.load()
@@ -117,11 +118,10 @@ class TexyGen(BaseModel):
             from previous_works.texygen.utils.utils import generate_samples
             codes = generate_samples(self.model.sess, self.model.generator,
                                      self.model.batch_size, n_samples, self.model.test_file)
-        print('%d samples generated!' % len(codes))
 
-        samples = self.parser.id_format2line(codes, True)
-        write_text(samples, self.model.test_file, True)
-        print('codes converted to text format and written in file %s.' % self.model.test_file)
+        samples = self.parser.id_format2line(codes, True, merge=False)
+        samples = [s for s in samples if len(s) > 0]
+        print('%d samples generated!' % len(samples))
         return samples
 
     def init_nll(self, data_loc):
@@ -147,26 +147,26 @@ class TexyGen(BaseModel):
         return inll
 
     def get_nll(self, samples=None):
-        samples = [' '.join(l) for l in self.parser.line2id_format(samples)]
         if samples is None:
-            data_loc = write_text(self.valid_data, self.get_name(), TEMP_PATH)
+            data_loc = write_text(self.valid_data, self.get_name() + '_nll', TEMP_PATH)
         else:
-            data_loc = write_text(samples, self.get_name(), TEMP_PATH)
+            samples = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(samples)[0]]
+            data_loc = write_text(samples, self.get_name() + '_nll', TEMP_PATH)
         inll = self.init_nll(data_loc)
         score = inll.get_score()
         delete_file(data_loc)
-        return score
+        return float(score)
 
     def get_persample_ll(self, samples=None):
-        samples = [' '.join(l) for l in self.parser.line2id_format(samples)]
         if samples is None:
-            data_loc = write_text(self.valid_data, self.get_name(), TEMP_PATH)
+            data_loc = write_text(self.valid_data, self.get_name() + '_snll', TEMP_PATH)
         else:
-            data_loc = write_text(samples, self.get_name(), TEMP_PATH)
+            samples = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(samples)[0]]
+            data_loc = write_text(samples, self.get_name() + '_snll', TEMP_PATH)
         ll = self.init_persample_ll(data_loc)
         score = ll.get_score()
         delete_file(data_loc)
-        return score
+        return [float(s) for s in score]
 
     def get_saving_path(self):
         return self.model_class.saving_path
@@ -175,6 +175,7 @@ class TexyGen(BaseModel):
         return self.model_class.__name__
 
     def load(self):
+        super().load()
         import tensorflow as tf
         self.model.sess.run(tf.global_variables_initializer())
         self.model.sess.run(tf.local_variables_initializer())
@@ -182,19 +183,19 @@ class TexyGen(BaseModel):
 
 
 class LeakGan(BaseModel):
-    def __init__(self, parser: Parser):
+    def __init__(self, parser: Parser2):
         super().__init__()
         import previous_works.leakgan2.Main as leakgan2main
         self.parser = parser
         self.model_module = leakgan2main
 
     def set_train_val_data(self, train_data, valid_data):
-        train_data = [' '.join(l) for l in self.parser.line2id_format(train_data)]
-        valid_data = [' '.join(l) for l in self.parser.line2id_format(valid_data)]
+        train_data = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(train_data)[0]]
+        valid_data = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(valid_data)[0]]
         super().set_train_val_data(train_data, valid_data)
         with open(self.model_module.positive_file, 'w') as trg:
             trg.write('\n'.join(train_data))
-        self.model = self.model_module.LeakGanMain(self, self.parser)
+            self.model = self.model_module.LeakGanMain(self, self.parser)
 
     def train(self):
         self.model.train()
@@ -202,36 +203,35 @@ class LeakGan(BaseModel):
 
     def generate_samples(self, n_samples, with_beam_search=False):
         codes = self.model.generate_samples(n_samples, self.model_module.dummy_file, 0)
-        print('%d samples generated!' % len(codes))
 
-        samples = self.parser.id_format2line(codes, True)
-        write_text(samples, self.model_module.dummy_file, True)
-        print('codes converted to text format and written in file %s.' % self.model_module.dummy_file)
+        samples = self.parser.id_format2line(codes, True, merge=False)
+        samples = [s for s in samples if len(s) > 0]
+        print('%d samples generated!' % len(samples))
         return samples
 
     def get_nll(self, samples=None):
-        samples = [' '.join(l) for l in self.parser.line2id_format(samples)]
         if samples is None:
-            data_loc = write_text(self.valid_data, self.get_name(), TEMP_PATH)
+            data_loc = write_text(self.valid_data, self.get_name() + '_nll', TEMP_PATH)
         else:
-            data_loc = write_text(samples, self.get_name(), TEMP_PATH)
+            samples = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(samples)[0]]
+            data_loc = write_text(samples, self.get_name() + '_nll', TEMP_PATH)
         dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
         dl.create_batches(data_loc)
         score = self.model.target_loss(dl)
         delete_file(data_loc)
-        return score
+        return float(score)
 
     def get_persample_ll(self, samples=None):
-        samples = [' '.join(l) for l in self.parser.line2id_format(samples)]
         if samples is None:
-            data_loc = write_text(self.valid_data, self.get_name(), TEMP_PATH)
+            data_loc = write_text(self.valid_data, self.get_name() + '_snll', TEMP_PATH)
         else:
-            data_loc = write_text(samples, self.get_name(), TEMP_PATH)
+            samples = [' '.join(list(map(str, l))) for l in self.parser.line2id_format(samples)[0]]
+            data_loc = write_text(samples, self.get_name() + '_snll', TEMP_PATH)
         dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
         dl.create_batches(data_loc)
         score = self.model.per_sample_ll(dl)
         delete_file(data_loc)
-        return score
+        return [float(s) for s in score]
 
     def get_saving_path(self):
         return self.model_module.model_path
@@ -240,6 +240,7 @@ class LeakGan(BaseModel):
         return 'leakgan2'
 
     def load(self):
+        super().load()
         import tensorflow as tf
         self.model.sess.run(tf.local_variables_initializer())
         self.model.sess.run(tf.global_variables_initializer())
@@ -252,7 +253,7 @@ class LeakGan(BaseModel):
 
 
 class TextGan(BaseModel):
-    def __init__(self, parser: Parser):
+    def __init__(self, parser: Parser2):
         super().__init__()
         self.parser = parser
 
@@ -267,8 +268,9 @@ class TextGan(BaseModel):
 
     def generate_samples(self, n_samples, with_beam_search=False):
         codes = self.model.generate()
-        samples = self.parser.id_format2line(codes, True)
-        # write_text(samples, self.model_module.dummy_file, True)
+        samples = self.parser.id_format2line(codes, True, merge=False)
+        samples = [s for s in samples if len(s) > 0]
+        # write_text(samples, self.model_module.dummy_file, is_complete_path=True)
         # print('codes converted to text format and written in file %s.' % self.model_module.dummy_file)
         return samples
 
@@ -286,6 +288,36 @@ class TextGan(BaseModel):
 
     def load(self):
         super().load()
+
+
+class DGSAN(BaseModel):
+    def __init__(self, parser: Parser2):
+        super().__init__()
+        self.parser = parser
+
+    def set_train_val_data(self, train_data, valid_data):
+        pass
+
+    def train(self):
+        pass
+
+    def generate_samples(self, n_samples, with_beam_search=False):
+        pass
+
+    def get_nll(self, samples=None):
+        pass
+
+    def get_persample_ll(self, samples=None):
+        pass
+
+    def get_saving_path(self):
+        pass
+
+    def get_name(self):
+        return 'DGSAN'
+
+    def load(self):
+        pass
 
 
 if __name__ == '__main__':

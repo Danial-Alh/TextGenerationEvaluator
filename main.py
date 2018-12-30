@@ -32,8 +32,9 @@ if args.action == 'train':
     if args.models is None:
         raise BaseException('specify the model to be trained!')
     for model_name in args.models:
-        tracker = BestModelTracker(model_name, ev, args.k)
+        tracker = BestModelTracker(model_name, ev)
         tracker.start()
+        tracker.model.delete()
 elif args.action == 'gen':
     ev.generate_samples(args.models, args.restore)
 elif args.action == 'eval':

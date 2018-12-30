@@ -114,7 +114,7 @@ class TexyGen(BaseModel):
         print('%d samples generated!' % len(codes))
 
         samples = self.parser.id_format2line(codes, True)
-        write_text(samples, self.model.test_file, True)
+        write_text(samples, self.model.test_file, is_complete_path=True)
         print('codes converted to text format and written in file %s.' % self.model.test_file)
         return samples
 
@@ -190,7 +190,7 @@ class LeakGan(BaseModel):
         print('%d samples generated!' % len(codes))
 
         samples = self.parser.id_format2line(codes, True)
-        write_text(samples, self.model_module.dummy_file, True)
+        write_text(samples, self.model_module.dummy_file, is_complete_path=True)
         print('codes converted to text format and written in file %s.' % self.model_module.dummy_file)
         return samples
 

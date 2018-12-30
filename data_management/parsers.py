@@ -164,7 +164,7 @@ class Parser2(PersistentClass):
         result = super().load()
         if not isinstance(self, OracleBasedParser):
             if result == PersistentClass.SUCCESSFUL_LOAD:
-                self.START_TOKEN_ID = len(self.vocab)
+                self.START_TOKEN_ID = self.vocab2id[self.START_TOKEN]
                 self.END_TOKEN_ID = self.vocab2id[self.END_TOKEN]
         return result
 
@@ -184,10 +184,10 @@ class Parser2(PersistentClass):
         del vocab_counter['']
         self.vocab = np.array(list(vocab_counter.keys()))
         np.random.shuffle(self.vocab)
-        self.vocab = np.concatenate((self.vocab, [self.END_TOKEN]), axis=0)
+        self.vocab = np.concatenate((self.vocab, [self.START_TOKEN, self.END_TOKEN]), axis=0)
         self.id2vocab = {str(i): v for i, v in enumerate(self.vocab)}
         self.vocab2id = {v: i for i, v in enumerate(self.vocab)}
-        self.START_TOKEN_ID = len(self.vocab)
+        self.START_TOKEN_ID = self.vocab2id[self.START_TOKEN]
         self.END_TOKEN_ID = self.vocab2id[self.END_TOKEN]
 
     def line2id_format(self, lines, reverse=False):
@@ -198,13 +198,16 @@ class Parser2(PersistentClass):
         """
 
         def convert(line):
-            vocabs = self._split_lines(line)[::-1] if reverse else self._split_lines(line)
+            if isinstance(line, str):
+                vocabs = self._split_lines(line)[::-1] if reverse else self._split_lines(line)
+            else:
+                vocabs = line[::-1] if reverse else line
             crop_point = min(self.max_length, len(vocabs))
             return [self.vocab2id[v] for v in vocabs[:crop_point]] + \
                    ([self.vocab2id[self.END_TOKEN]] * (self.max_length - crop_point)), \
                    (self.max_length if self.max_length == crop_point else (crop_point + 1))  # +1 for end token
 
-        if isinstance(lines, str):
+        if isinstance(lines, str) or isinstance(lines[0], str):
             id_formatted, lengths = convert(lines)
         else:
             id_formatted = []
@@ -215,7 +218,7 @@ class Parser2(PersistentClass):
                 lengths.append(l)
         return id_formatted, lengths
 
-    def id_format2line(self, id_format_lines, trim=False, reverse=False):
+    def id_format2line(self, id_format_lines, trim=True, reverse=False, merge=True):
         """
         converts id format line to string format
         :param id_format_lines: either list(int) or list(list(int))
@@ -237,7 +240,8 @@ class Parser2(PersistentClass):
             if trim:
                 line = line[line_slice]
             assert self.START_TOKEN_ID not in line, 'start token id must not be in list!'
-            return self.vocab_separator_character.join([self.id2vocab[str(vocab_id)] for vocab_id in line])
+            line = [self.id2vocab[str(vocab_id)] for vocab_id in line]
+            return self.vocab_separator_character.join(line) if merge else line
 
         if not isinstance(id_format_lines[0], (np.int, np.int64, np.int32, int)):
             return [convert(l) for l in id_format_lines]
@@ -249,7 +253,7 @@ class CharacterBasedParser(Parser):
         super().__init__(lines, lambda x: [i for i in x], '', name=name)
 
 
-class WordBasedParser(Parser):
+class WordBasedParser(Parser2):
     def __init__(self, lines, name=''):
         import nltk
         super().__init__(lines, nltk.word_tokenize, ' ', name=name)
@@ -297,11 +301,14 @@ class OracleBasedParser(Parser2):
         """
 
         def convert(line):
-            vocabs = self._split_lines(line)[::-1] if reverse else self._split_lines(line)
+            if isinstance(line, str):
+                vocabs = self._split_lines(line)[::-1] if reverse else self._split_lines(line)
+            else:
+                vocabs = line[::-1] if reverse else line
             assert self.max_length == len(vocabs), 'line should satisfy max len!'
             return [self.vocab2id[v] for v in vocabs], self.max_length
 
-        if isinstance(lines, str):
+        if isinstance(lines, str) or isinstance(lines[0], str):
             id_formatted, lengths = convert(lines)
         else:
             id_formatted = []

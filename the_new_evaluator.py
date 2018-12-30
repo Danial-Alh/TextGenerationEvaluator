@@ -33,17 +33,19 @@ class Evaluator:
         self.dm_name = dm_name
         self.data_manager = data_manager
         self.during_training_n_sampling = 5000
-        self.test_n_sampling = 20000
+        self.test_n_sampling = 1000
         self.test_restore_types = None
 
         self.init_dataset()
         self.init_metrics(mode)
 
     def init_dataset(self):
-        self.train_data = self.data_manager.get_parser(). \
-            id_format2line(self.data_manager.get_training_data(self.k, unpack=True)[1])  # without start token
-        self.valid_data = self.data_manager.get_parser(). \
-            id_format2line(self.data_manager.get_validation_data(self.k, unpack=True)[1])  # without start token
+        self.train_data = tokenize(self.data_manager.get_parser(). \
+                                   id_format2line(self.data_manager.get_training_data(self.k, unpack=True)[1]))
+        # without start token
+        self.valid_data = tokenize(self.data_manager.get_parser(). \
+                                   id_format2line(self.data_manager.get_validation_data(self.k, unpack=True)[1]))
+        # without start token
 
     def init_metrics(self, mode):
         pass
@@ -68,15 +70,27 @@ class Evaluator:
             for model_name in model_names:
                 print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
 
-                model = create_model(model_name, self.data_manager.get_parser())
-                dumper = Dumper(model, self.k, self.dm_name)
+                tracker = BestModelTracker(model_name, self)
+                dumper = tracker.dumper
+                model = tracker.model
                 dumper.restore_model(restore_type)
 
                 sample_lines = model.generate_samples(self.test_n_sampling)
-                max_n_samples = max(len(sample_lines), max(self.valid_data))
-                sample_lines = sample_lines[:max_n_samples]
-                valid_lines = self.valid_data[:max_n_samples]
-                additional_fields = self.get_sample_additional_fields(model, sample_lines, valid_lines, restore_type)
+                additional_fields = self.get_sample_additional_fields(model, sample_lines,
+                                                                      self.valid_data, restore_type)
+
+                key = list(additional_fields['gen'].keys())[0]
+                min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
+                sample_lines = sample_lines[:min_len]
+                for key in additional_fields['gen']:
+                    additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
+
+                key = list(additional_fields['valid'].keys())[0]
+                min_len = min(len(self.valid_data), len(additional_fields['valid'][key]))
+                valid_lines = self.valid_data[:min_len]
+                for key in additional_fields['valid']:
+                    additional_fields['valid'][key] = additional_fields['valid'][key][:min_len]
+
                 dumper.dump_samples_with_additional_fields(sample_lines,
                                                            additional_fields['gen'],
                                                            restore_type, 'gen')
@@ -110,60 +124,59 @@ class RealWorldEvaluator(Evaluator):
     def __init__(self, data_manager: SentenceDataManager, mode, k=0, dm_name=''):
         super().__init__(data_manager, mode, k, dm_name)
         self.test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
+        self.selfbleu_sample_size = 50
 
     def init_metrics(self, mode):
         if mode == 'train':
             # valid_texts = list(np.random.choice(self.valid_data, 1000, replace=False))
-            # valid_tokens = tokenize(valid_texts)
-            valid_tokens = tokenize(self.valid_data)
-            self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
-            self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
-            self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
-        if mode == 'test':
+            # self.bleu5 = Bleu(self.valid_data, weights=np.ones(5) / 5.)
+            # self.bleu4 = Bleu(self.valid_data, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
+            self.bleu3 = Bleu(self.valid_data, weights=np.ones(3) / 3.)
+        elif mode == 'eval':
             # valid_texts = list(np.random.choice(self.valid_data, 1000, replace=False))
-            # valid_tokens = tokenize(valid_texts)
-            valid_tokens = tokenize(self.valid_data)
-            self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
-            self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
-            self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
-            self.bleu2 = Bleu(valid_tokens, weights=np.ones(2) / 2., cached_fields=self.bleu5.get_cached_fields())
-            self.jaccard5 = MSJaccard(valid_tokens, 5)
-            self.jaccard4 = MSJaccard(valid_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
-            self.jaccard3 = MSJaccard(valid_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
-            self.jaccard2 = MSJaccard(valid_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-            self.fbd = FBD(self.valid_data)
-        if mode == 'gen':
+            self.bleu5 = Bleu(self.valid_data, weights=np.ones(5) / 5.)
+            self.bleu4 = Bleu(self.valid_data, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
+            self.bleu3 = Bleu(self.valid_data, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
+            self.bleu2 = Bleu(self.valid_data, weights=np.ones(2) / 2., cached_fields=self.bleu5.get_cached_fields())
+            self.jaccard5 = MSJaccard(self.valid_data, 5)
+            self.jaccard4 = MSJaccard(self.valid_data, 4, cached_fields=self.jaccard5.get_cached_fields())
+            self.jaccard3 = MSJaccard(self.valid_data, 3, cached_fields=self.jaccard5.get_cached_fields())
+            self.jaccard2 = MSJaccard(self.valid_data, 2, cached_fields=self.jaccard5.get_cached_fields())
+            # self.fbd = FBD(self.valid_data)
+        elif mode == 'gen':
             pass
+        else:
+            raise BaseException('invalid evaluator mode!')
 
     def get_initial_scores_during_training(self):
         return {
             'bleu3': [{"value": 0.0, "epoch": -1}],
-            'bleu4': [{"value": 0.0, "epoch": -1}],
-            'bleu5': [{"value": 0.0, "epoch": -1}],
+            # 'bleu4': [{"value": 0.0, "epoch": -1}],
+            # 'bleu5': [{"value": 0.0, "epoch": -1}],
             '-nll': [{"value": -np.inf, "epoch": -1}]
         }
 
     def get_during_training_scores(self, model: BaseModel):
-        new_samples = tokenize(model.generate_samples(self.during_training_n_sampling))
+        new_samples = model.generate_samples(self.during_training_n_sampling)
         new_scores = {
             'bleu3': np.mean(self.bleu3.get_score(new_samples)),
-            'bleu4': np.mean(self.bleu4.get_score(new_samples)),
-            'bleu5': np.mean(self.bleu5.get_score(new_samples)),
-            '-nll': -float(model.get_nll())
+            # 'bleu4': np.mean(self.bleu4.get_score(new_samples)),
+            # 'bleu5': np.mean(self.bleu5.get_score(new_samples)),
+            '-nll': -model.get_nll()
         }
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_lines, valid_lines, restore_type):
-        logqfromp = np.array(model.get_persample_ll(valid_lines))
-        logqfromq = np.array(model.get_persample_ll(sample_lines))
-        return {'gen': {'logqfromq': logqfromq}, 'valid': {'logqfromp': logqfromp}}
+        lnqfromp = model.get_persample_ll(valid_lines)
+        lnqfromq = model.get_persample_ll(sample_lines)
+        return {'gen': {'lnq': lnqfromq}, 'valid': {'lnq': lnqfromp}}
 
     def get_test_scores(self, dumper, restore_type):
         samples_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'gen')
         refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'valid')
-        samples = tokenize([r['text'] for r in samples_with_additional_fields])
+        samples = [r['text'] for r in samples_with_additional_fields]
 
-        subsamples_mask = np.random.choice(range(len(samples)), 5000, replace=False)
+        subsamples_mask = np.random.choice(range(len(samples)), self.selfbleu_sample_size, replace=False)
         subsamples = np.array(samples)[subsamples_mask].tolist()
 
         self_bleu5 = SelfBleu(subsamples, weights=np.ones(5) / 5.)
@@ -180,14 +193,14 @@ class RealWorldEvaluator(Evaluator):
                                    cached_fields=self_bleu5.get_cached_fields()).get_score(),
             'self_bleu2': SelfBleu(subsamples, weights=np.ones(2) / 2.,
                                    cached_fields=self_bleu5.get_cached_fields()).get_score(),
-            '-nll': [r['logqfromp'] for r in refs_with_additional_fields]
+            '-nll': [r['lnq'] for r in refs_with_additional_fields]
         }
         scores_mean = {
             'jaccard5': jaccard5_score,
             'jaccard4': self.jaccard4.get_score(samples, cache=jaccard_cache),
             'jaccard3': self.jaccard3.get_score(samples, cache=jaccard_cache),
             'jaccard2': self.jaccard2.get_score(samples, cache=jaccard_cache),
-            'fbd': self.fbd.get_score(samples)
+            # 'fbd': self.fbd.get_score(samples)
         }
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
@@ -202,10 +215,12 @@ class OracleEvaluator(Evaluator):
     def init_metrics(self, mode):
         if mode == 'train':
             self.oracle = Oracle_LSTM()
-        if mode == 'test':
+        elif mode == 'test':
             self.oracle = Oracle_LSTM()
-        if mode == 'gen':
+        elif mode == 'gen':
             pass
+        else:
+            raise BaseException('invalid evaluator mode!')
 
     def get_initial_scores_during_training(self):
         return {
@@ -214,25 +229,20 @@ class OracleEvaluator(Evaluator):
         }
 
     def get_during_training_scores(self, model: BaseModel):
-        new_samples = tokenize(model.generate_samples(self.during_training_n_sampling))
+        new_samples = model.generate_samples(self.during_training_n_sampling)
         new_scores = {
             '-nll_oracle': np.mean(self.oracle.log_probability(new_samples)),
-            '-nll': -float(model.get_nll())
+            '-nll': -model.get_nll()
         }
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_lines, valid_lines, restore_type):
-        sample_tokens = tokenize(sample_lines)
-        sample_tokens = [[int(vv) for vv in v] for v in sample_tokens]
-        valid_tokens = tokenize(valid_lines)
-        valid_tokens = [[int(vv) for vv in v] for v in valid_tokens][:len(sample_tokens)]
-
-        logqfromp = np.array(model.get_persample_ll(valid_lines))
-        logqfromq = np.array(model.get_persample_ll(sample_lines))
-        logpfromp = np.array(self.oracle.log_probability(valid_tokens))
-        logpfromq = np.array(self.oracle.log_probability(sample_tokens))
-        return {'gen': {'logqfromq': logqfromq, 'logpfromq': logpfromq},
-                'valid': {'logqfromp': logqfromp, 'logpfromp': logpfromp}}
+        lnqfromp = model.get_persample_ll(valid_lines)
+        lnqfromq = model.get_persample_ll(sample_lines)
+        lnpfromp = self.oracle.log_probability(valid_lines)
+        lnpfromq = self.oracle.log_probability(sample_lines)
+        return {'gen': {'lnq': lnqfromq, 'lnp': lnpfromq},
+                'valid': {'lnq': lnqfromp, 'lnp': lnpfromp}}
 
     def get_test_scores(self, dumper, restore_type):
         from metrics.divergences import Bhattacharyya, Jeffreys
@@ -240,23 +250,23 @@ class OracleEvaluator(Evaluator):
         samples_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'gen')
         refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'valid')
 
-        logqfromp = [r['logqfromp'] for r in refs_with_additional_fields]
-        logqfromq = [r['logqfromq'] for r in samples_with_additional_fields]
-        logpfromp = [r['logpfromp'] for r in refs_with_additional_fields]
-        logpfromq = [r['logpfromq'] for r in samples_with_additional_fields]
+        lnqfromp = [r['lnq'] for r in refs_with_additional_fields]
+        lnqfromq = [r['lnq'] for r in samples_with_additional_fields]
+        lnpfromp = [r['lnp'] for r in refs_with_additional_fields]
+        lnpfromq = [r['lnp'] for r in samples_with_additional_fields]
 
         scores_persample = {
-            'logqfromp': logqfromp,
-            'logqfromq': logqfromq,
-            'logpfromp': logpfromp,
-            'logpfromq': logpfromq
+            'lnqfromp': lnqfromp,
+            'lnqfromq': lnqfromq,
+            'lnpfromp': lnpfromp,
+            'lnpfromq': lnpfromq
         }
         scores_mean = {
-            'bhattacharyya': float(Bhattacharyya(logpfromp, logqfromp, logpfromq, logqfromq)),
-            'jeffreys': float(Jeffreys(logpfromp, logqfromp, logpfromq, logqfromq)),
+            'bhattacharyya': Bhattacharyya(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
+            'jeffreys': Jeffreys(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
         }
         for key in scores_persample:
-            scores_mean[key] = float(np.mean(scores_persample[key]))
+            scores_mean[key] = np.mean(scores_persample[key])
         return scores_persample, scores_mean
 
 
@@ -286,46 +296,47 @@ class Dumper:
     def dump_generated_samples(self, samples, load_key):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
+        write_text(samples, os.path.join(self.saving_path, load_key + '_based_samples'), is_complete_path=True)
 
     def load_generated_samples(self, load_key):
-        return read_text(os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
+        return read_text(os.path.join(self.saving_path, load_key + '_based_samples'), is_complete_path=True)
 
     def get_generated_samples_path(self, load_key):
-        return os.path.join(self.saving_path, load_key + '_based_samples.txt')
+        return os.path.join(self.saving_path, load_key + '_based_samples')
 
     def dump_best_history(self, best_history):
         dump_json(best_history, 'best_history', self.saving_path)
 
     def dump_samples_with_additional_fields(self, samples, additional_fields: dict, load_key, sample_label):
-        if not isinstance(samples[0], str):
-            samples = [" ".join(s) for s in samples]
         dump_json([
-            {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
+            {**{'text': ' '.join(samples[i])}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
-            sample_label + '_' + load_key + '_based_samples.txt', self.saving_path)
+            sample_label + '_' + load_key + '_based_samples', self.saving_path)
 
     def load_samples_with_additional_fields(self, load_key, sample_label):
-        return load_json(sample_label + '_' + load_key + '_based_samples.txt', self.saving_path)
+        result = load_json(sample_label + '_' + load_key + '_based_samples', self.saving_path)
+        for r in result:
+            r['text'] = r['text'].split(' ')
+        return result
 
     def dump_final_results(self, results, restore_type):
-        dump_json(results, self.final_result_file_name + '_' + restore_type, EXPORT_PATH)
+        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore', EXPORT_PATH)
 
     def load_final_results(self, restore_type):
-        return load_json(self.final_result_file_name + '_' + restore_type, EXPORT_PATH)
+        return load_json(self.final_result_file_name + '_' + restore_type + 'restore', EXPORT_PATH)
 
     def dump_final_results_details(self, results, restore_type):
-        dump_json(results, self.final_result_file_name + '_' + restore_type, EXPORT_PATH)
+        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore_details', EXPORT_PATH)
 
     def load_final_results_details(self, restore_type):
-        return load_json(self.final_result_file_name + '_' + restore_type, EXPORT_PATH)
+        return load_json(self.final_result_file_name + '_' + restore_type + 'restore_details', EXPORT_PATH)
 
 
 class BestModelTracker:
-    def __init__(self, model_name, evaluator: Evaluator, k=0):
-        self.k = k
+    def __init__(self, model_name, evaluator: Evaluator):
+        self.k = evaluator.k
         self.model = create_model(model_name, evaluator.data_manager.get_parser())
-        self.dumper = Dumper(self.model, k, evaluator.dm_name)
+        self.dumper = Dumper(self.model, self.k, evaluator.dm_name)
         self.evaluator = evaluator
         self.best_history = self.evaluator.get_initial_scores_during_training()
         self.model.set_tracker(self)

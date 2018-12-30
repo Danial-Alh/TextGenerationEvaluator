@@ -32,7 +32,7 @@ def Bhattacharyya(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
     res = -0.5 * (logmeanexp(0.5 * lndiff_q) + logmeanexp(-0.5 * lndiff_p))
     # res = np.exp(0.5 * lndiff1) + np.exp(-0.5 * lndiff2)
     # res = -1. * np.log(np.mean(res))
-    return res
+    return float(res)
 
 
 def JensenShannon(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):

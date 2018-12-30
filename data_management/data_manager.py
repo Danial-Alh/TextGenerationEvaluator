@@ -4,7 +4,7 @@ import numpy as np
 
 from data_management.batch_managers import BatchManager
 from data_management.data_loaders import SentenceDataloader
-from data_management.parsers import WordBasedParser, Parser, OracleBasedParser
+from data_management.parsers import WordBasedParser, OracleBasedParser, Parser2
 from utils.file_handler import PersistentClass, write_text
 
 
@@ -109,7 +109,7 @@ class SentenceDataManager(DataManager):
     def _parse_data(self):
         super()._parse_data()
         parser = self.parsers[0]
-        self.data = list(self.data)
+        self.data = list(self.data)[:10000]
         id_format_lines, lengths = [[]], [0]
         for i, d in enumerate(self.data):
             id_format_line, l = parser.line2id_format(d)
@@ -125,11 +125,12 @@ class SentenceDataManager(DataManager):
 
         text = np.array([s for s in text])
 
-        text_shifted = np.hstack((text[:, 1:], np.reshape([self.parsers[0].END_TOKEN_ID] * packed_data.shape[0],
-                                                          (packed_data.shape[0], 1))))
-        return text, text_shifted, lengths
+        text_shifted = np.concatenate(
+            (np.reshape([self.parsers[0].START_TOKEN_ID] * packed_data.shape[0], (packed_data.shape[0], 1)),
+             text[:, :-1]), axis=1)
+        return text_shifted, text, lengths
 
-    def get_parser(self) -> Parser:
+    def get_parser(self) -> Parser2:
         return self.parsers[0]
 
     def dump_unpacked_data_on_file(self, unpacked_data, file_name, parse=False):
@@ -154,16 +155,6 @@ class OracleDataManager(SentenceDataManager):
         data_loaders = data_loaders
         parsers = [OracleBasedParser]
         super().__init__(data_loaders, parsers=parsers, parser_name=parser_name, k_fold=k_fold, concatenated_name='')
-
-    def unpack_data(self, packed_data):
-        text, lengths = packed_data[:]['text'], packed_data[:]['len']
-
-        text = np.array([s for s in text])
-
-        text_shifted = np.concatenate(
-            (np.reshape([self.parsers[0].START_TOKEN_ID] * packed_data.shape[0], (packed_data.shape[0], 1)),
-             text[:, :-1]), axis=1)
-        return text_shifted, text, lengths
 
 
 if __name__ == '__main__':
