@@ -2,8 +2,8 @@ from collections import Counter
 
 import numpy as np
 
-from file_handler import PersistentClass
-from path_configs import DATASET_PATH
+from utils.file_handler import PersistentClass
+from utils.path_configs import DATASET_PATH
 
 
 class Parser(PersistentClass):
@@ -314,7 +314,7 @@ class OracleBasedParser(Parser2):
 
 
 if __name__ == '__main__':
-    from file_handler import read_text
+    from utils.file_handler import read_text
 
     lines = read_text('coco-train')
     p = WordBasedParser(lines, 10, 'coco-words')

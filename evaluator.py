@@ -4,12 +4,12 @@ import numpy as np
 
 from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager, OracleDataManager
-from file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
+from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
 from models import BaseModel, TexyGen, LeakGan, TextGan
-from path_configs import MODEL_PATH, EXPORT_PATH
+from utils.path_configs import MODEL_PATH, EXPORT_PATH
 from utils import tokenize
 
 

@@ -4,7 +4,7 @@ import pickle
 
 import numpy as np
 
-from file_handler import write_text
+from utils.file_handler import write_text
 from metrics.oracle.target_lstm import TARGET_LSTM
 
 

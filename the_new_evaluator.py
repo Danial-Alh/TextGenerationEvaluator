@@ -3,16 +3,16 @@ import os
 import numpy as np
 
 from data_management.data_manager import SentenceDataManager, OracleDataManager
-from file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
-    load_json
+from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
+    load_json, delete_file
 from metrics.bleu import Bleu
 from metrics.fbd import FBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
 from models import BaseModel, TexyGen, LeakGan, TextGan
-from path_configs import MODEL_PATH, EXPORT_PATH
-from utils import tokenize
+from utils.path_configs import MODEL_PATH, EXPORT_PATH
+from utils.nltk_utils import tokenize
 
 
 def create_model(model_name, parser):
@@ -59,10 +59,15 @@ class Evaluator:
     def get_test_scores(self, dumper, restore_type):
         pass
 
-    def generate_samples(self):
-        for restore_type in self.test_restore_types:
+    def generate_samples(self, model_names, restore_types):
+        if restore_types is None:
+            restore_types = self.test_restore_types
+        if model_names is None:
+            model_names = all_models
+
+        for restore_type in restore_types:
             print(restore_type)
-            for model_name in ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']:
+            for model_name in model_names:
                 print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
 
                 model = create_model(model_name, self.data_manager.get_parser())
@@ -84,10 +89,15 @@ class Evaluator:
     def get_sample_additional_fields(self, model: BaseModel, sample_lines, valid_lines, restore_type):
         pass
 
-    def final_evaluate(self):
-        for restore_type in self.test_restore_types:
+    def final_evaluate(self, model_names, restore_types):
+        if restore_types is None:
+            restore_types = self.test_restore_types
+        if model_names is None:
+            model_names = all_models
+
+        for restore_type in restore_types:
             print(restore_type)
-            for model_name in ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']:
+            for model_name in model_names:
                 print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
                 m = create_model(model_name, self.data_manager.get_parser())
                 dumper = Dumper(m, self.k, self.dm_name)
@@ -156,6 +166,7 @@ class RealWorldEvaluator(Evaluator):
 
         logqfromp = np.array(model.get_persample_ll(self.valid_loc))
         logqfromq = np.array(model.get_persample_ll(id_format_sample_loc))
+        delete_file(id_format_sample_loc)
         return {'gen': {'logqfromq': logqfromq}, 'valid': {'logqfromp': logqfromp}}
 
     def get_test_scores(self, dumper, restore_type):
@@ -330,10 +341,10 @@ class Dumper:
 
 
 class BestModelTracker:
-    def __init__(self, model: BaseModel, evaluator: Evaluator, k=0):
+    def __init__(self, model_name, evaluator: Evaluator, k=0):
         self.k = k
-        self.model = model
-        self.dumper = Dumper(model, k, evaluator.dm_name)
+        self.model = create_model(model_name, evaluator.data_manager.get_parser())
+        self.dumper = Dumper(self.model, k, evaluator.dm_name)
         self.evaluator = evaluator
         self.best_history = self.evaluator.get_initial_scores_during_training()
         self.model.set_dumper(self)
@@ -356,5 +367,9 @@ class BestModelTracker:
                 self.best_history[key].append({"value": new_v, "epoch": epoch})
                 self.dumper.dump_best_history(self.best_history)
 
+    def start(self):
+        self.model.train()
+
 
 k_fold = 3
+all_models = ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']

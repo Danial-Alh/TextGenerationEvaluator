@@ -6,7 +6,7 @@ from zipfile import ZipFile
 
 import numpy as np
 
-from path_configs import DATASET_PATH, OBJ_fILES_PATH
+from utils.path_configs import DATASET_PATH, OBJ_fILES_PATH
 
 
 def read_text(file_name, is_complete_path=False):
@@ -20,9 +20,9 @@ def read_text(file_name, is_complete_path=False):
     return np.array(lines)
 
 
-def write_text(lines, file_name, is_complete_path=False):
+def write_text(lines, file_name, parent_path=DATASET_PATH, is_complete_path=False):
     if not is_complete_path:
-        path = DATASET_PATH + file_name + '.txt'
+        path = parent_path + file_name + '.txt'
     else:
         path = file_name
     with open(path, 'w', encoding='utf8') as file:
@@ -89,6 +89,10 @@ def load_json(file_name, parent_path):
     path = os.path.join(parent_path, file_name) + '.json'
     with open(path, 'r') as file:
         return json.load(file)
+
+
+def delete_file(path):
+    os.remove(path)
 
 
 class PersistentClass:

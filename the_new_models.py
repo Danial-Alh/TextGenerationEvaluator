@@ -1,26 +1,28 @@
 from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager
 from data_management.parsers import Parser
-from utils.file_handler import write_text, read_text
+from utils.file_handler import write_text, read_text, delete_file
 from utils.nltk_utils import tokenize
+from utils.path_configs import TEMP_PATH
 
 
 class BaseModel:
-    def __init__(self):
-        self.dumper = None
+    def __init__(self, detailed_description):
+        self.tracker = None
+        self.detailed_description = detailed_description
         pass
 
     def update_scores(self, epoch_num):
         print('evaluator called %d!' % epoch_num)
-        assert self.dumper is not None, 'Evaluator is none!'
-        self.dumper.update_scores(epoch_num)
+        assert self.tracker is not None, 'Evaluator is none!'
+        self.tracker.update_scores(epoch_num)
 
-    def set_dumper(self, dumper):
-        self.dumper = dumper
+    def set_tracker(self, dumper):
+        self.tracker = dumper
 
-    def set_train_val_loc(self, train_loc, valid_loc):
-        self.train_loc = train_loc
-        self.valid_loc = valid_loc
+    def set_train_val_data(self, train_data, valid_data):
+        self.train_data = train_data
+        self.valid_data = valid_data
 
     def delete_saved_model(self):
         import os, shutil
@@ -35,7 +37,7 @@ class BaseModel:
     def generate_samples(self, n_samples, with_beam_search=False):
         pass
 
-    def get_nll(self, data_loc=None):
+    def get_nll(self, samples=None):
         pass
 
     def delete(self):
@@ -48,16 +50,19 @@ class BaseModel:
     def get_name(self):
         pass
 
+    def get_detailed_name(self):
+        return self.get_name() + '_' + self.detailed_description
+
     def load(self):
         pass
 
-    def get_persample_ll(self, data_loc=None):
+    def get_persample_ll(self, samples=None):
         pass
 
 
 class TexyGen(BaseModel):
 
-    def __init__(self, gan_name, parser: Parser):
+    def __init__(self, gan_name, parser: Parser, detailed_description=''):
         from previous_works.texygen.models.leakgan.Leakgan import Leakgan
         from previous_works.texygen.models.leakgan.LeakganDataLoader import DataLoader as LeakganDL
         from previous_works.texygen.models.maligan_basic.Maligan import Maligan
@@ -83,23 +88,27 @@ class TexyGen(BaseModel):
         dls['rankgan'] = RankganDL
         dls['maligan'] = MaliganDL
         dls['mle'] = MLEDL
-        super().__init__()
+        super().__init__(detailed_description)
         self.train_loc = None
         self.valid_loc = None
         self.parser = parser
         self.model_class = gans[gan_name.lower()]
         self.dataloader_class = dls[gan_name.lower()]
 
-    def set_train_val_loc(self, train_loc, valid_loc):
-        super().set_train_val_loc(train_loc, valid_loc)
+    def __del__(self):
+        if self.train_loc is not None:
+            delete_file(self.train_loc)
+
+    def set_train_val_data(self, train_data, valid_data):
+        super().set_train_val_data(train_data, valid_data)
+        self.train_loc = write_text(train_data, self.get_detailed_name(), TEMP_PATH)
         self.model = self.model_class()
-        self.model.init_real_trainng(train_loc, self.parser)
-        self.valid_nll = self.init_nll(valid_loc)
+        self.model.init_real_trainng(self.train_loc, self.parser)
         self.load()
 
     def train(self):
         self.model.train_real(self.train_loc, self)
-        self.dumper.update_scores(last_iter=True)
+        self.tracker.update_scores(last_iter=True)
 
     def generate_samples(self, n_samples, with_beam_search=False):
         print('generating {} samples from {}!'.format(n_samples, self.model.__class__.__name__))
@@ -140,16 +149,25 @@ class TexyGen(BaseModel):
         inll.set_name('persample_ll' + data_loc)
         return inll
 
-    def get_nll(self, data_loc=None):
-        if data_loc is None or data_loc == self.valid_loc:
-            inll = self.valid_nll
+    def get_nll(self, samples=None):
+        if samples is None:
+            data_loc = write_text(self.valid_data, self.get_detailed_name(), TEMP_PATH)
         else:
-            inll = self.init_nll(data_loc)
-        return inll.get_score()
+            data_loc = write_text(samples, self.get_detailed_name(), TEMP_PATH)
+        inll = self.init_nll(data_loc)
+        score = inll.get_score()
+        delete_file(data_loc)
+        return score
 
-    def get_persample_ll(self, data_loc=None):
+    def get_persample_ll(self, samples=None):
+        if samples is None:
+            data_loc = write_text(self.valid_data, self.get_detailed_name(), TEMP_PATH)
+        else:
+            data_loc = write_text(samples, self.get_detailed_name(), TEMP_PATH)
         ll = self.init_persample_ll(data_loc)
-        return ll.get_score()
+        score = ll.get_score()
+        delete_file(data_loc)
+        return score
 
     def get_saving_path(self):
         return self.model_class.saving_path
@@ -171,18 +189,15 @@ class LeakGan(BaseModel):
         self.parser = parser
         self.model_module = leakgan2main
 
-    def set_train_val_loc(self, train_loc, valid_loc):
-        super().set_train_val_loc(train_loc, valid_loc)
-        with open(train_loc) as ref:
-            with open(self.model_module.positive_file, 'w') as trg:
-                trg.write(''.join(ref.readlines()))
-        self.valid_data_loader = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
-        self.valid_data_loader.create_batches(valid_loc)
+    def set_train_val_data(self, train_data, valid_data):
+        super().set_train_val_data(train_data, valid_data)
+        with open(self.model_module.positive_file, 'w') as trg:
+            trg.write('\n'.join(train_data))
         self.model = self.model_module.LeakGanMain(self, self.parser)
 
     def train(self):
         self.model.train()
-        self.dumper.update_scores(last_iter=True)
+        self.tracker.update_scores(last_iter=True)
 
     def generate_samples(self, n_samples, with_beam_search=False):
         codes = self.model.generate_samples(n_samples, self.model_module.dummy_file, 0)
@@ -194,18 +209,23 @@ class LeakGan(BaseModel):
         print('codes converted to text format and written in file %s.' % self.model_module.dummy_file)
         return samples
 
-    def get_nll(self, data_loc=None):
-        if data_loc is None or data_loc == self.valid_loc:
-            dl = self.valid_data_loader
-        else:
-            dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
-            dl.create_batches(data_loc)
-        return self.model.target_loss(dl)
-
-    def get_persample_ll(self, data_loc=None):
+    def get_nll(self, samples=None):
+        if samples is None:
+            data_loc = write_text(self.valid_data, self.get_detailed_name(), TEMP_PATH)
         dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
         dl.create_batches(data_loc)
-        return self.model.per_sample_ll(dl)
+        score = self.model.target_loss(dl)
+        delete_file(data_loc)
+        return score
+
+    def get_persample_ll(self, samples=None):
+        if samples is None:
+            data_loc = write_text(self.valid_data, self.get_detailed_name(), TEMP_PATH)
+        dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
+        dl.create_batches(data_loc)
+        score = self.model.per_sample_ll(dl)
+        delete_file(data_loc)
+        return score
 
     def get_saving_path(self):
         return self.model_module.model_path
@@ -230,16 +250,14 @@ class TextGan(BaseModel):
         super().__init__()
         self.parser = parser
 
-    def set_train_val_loc(self, train_loc, valid_loc):
+    def set_train_val_data(self, train_data, valid_data):
+        super().set_train_val_data(train_data, valid_data)
         from previous_works.textgan2.textGAN import TextGANMMD
-        import numpy as np
-        train_data = np.array(tokenize(read_text(train_loc, True)))[:, :-1]
-        valid_data = np.array(tokenize(read_text(valid_loc, True)))[:, :-1]
         self.model = TextGANMMD(self, self.parser, train_data, valid_data)
 
     def train(self):
         self.model.train_func()
-        self.dumper.update_scores(last_iter=True)
+        self.tracker.update_scores(last_iter=True)
 
     def generate_samples(self, n_samples, with_beam_search=False):
         codes = self.model.generate()

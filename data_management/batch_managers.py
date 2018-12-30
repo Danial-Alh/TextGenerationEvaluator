@@ -1,6 +1,6 @@
 import numpy as np
 
-from file_handler import PersistentClass
+from utils.file_handler import PersistentClass
 
 
 class BatchManager(PersistentClass):

@@ -1,4 +1,4 @@
-from file_handler import read_text
+from utils.file_handler import read_text
 
 
 class Dataloader:

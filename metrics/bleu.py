@@ -7,7 +7,7 @@ import numpy as np
 from nltk import ngrams
 from nltk.translate.bleu_score import SmoothingFunction
 
-from utils import get_ngrams, Threader
+from utils.nltk_utils import get_ngrams, Threader
 
 
 def corpus_bleu(references,

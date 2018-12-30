@@ -6,7 +6,7 @@ import numpy as np
 from nltk.translate.bleu_score import SmoothingFunction
 
 from metrics.bleu import corpus_bleu
-from utils import get_ngrams, Threader
+from utils.nltk_utils import get_ngrams, Threader
 
 
 class SelfBleu():  # this class speedup computation when reference is same for multisample

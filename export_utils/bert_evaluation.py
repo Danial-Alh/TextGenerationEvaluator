@@ -2,7 +2,7 @@ import json
 import os
 
 from metrics.fbd import FBD
-from path_configs import EXPORT_PATH
+from utils.path_configs import EXPORT_PATH
 
 res = {}
 

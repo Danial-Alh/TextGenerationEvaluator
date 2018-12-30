@@ -3,7 +3,7 @@ from functools import reduce
 
 import numpy as np
 
-from utils import get_ngrams
+from utils.nltk_utils import get_ngrams
 
 
 class MSJaccard:

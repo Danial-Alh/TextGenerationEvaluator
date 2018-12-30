@@ -5,7 +5,7 @@ import numpy as np
 from data_management.batch_managers import BatchManager
 from data_management.data_loaders import SentenceDataloader
 from data_management.parsers import WordBasedParser, Parser, OracleBasedParser
-from file_handler import PersistentClass, write_text
+from utils.file_handler import PersistentClass, write_text
 
 
 class DataManager(PersistentClass):

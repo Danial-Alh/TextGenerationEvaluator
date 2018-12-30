@@ -2,7 +2,7 @@ import json
 import os
 
 from export_utils.evaluation_utils import TblGenerator, change_model_name, change_metric_name
-from path_configs import EXPORT_PATH
+from utils.path_configs import EXPORT_PATH
 
 possible_base_list = ["-nll_oracle", "last_iter"]
 
