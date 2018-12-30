@@ -148,6 +148,7 @@ class SentenceDataManager(DataManager):
         text = self.get_parser().id_format2line(text, trim=True)
         return text
 
+
 class OracleDataManager(SentenceDataManager):
     def __init__(self, data_loaders, parser_name, k_fold=3):
         data_loaders = data_loaders

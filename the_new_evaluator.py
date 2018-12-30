@@ -3,16 +3,16 @@ import os
 import numpy as np
 
 from data_management.data_manager import SentenceDataManager, OracleDataManager
-from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
-    load_json, delete_file
 from metrics.bleu import Bleu
 from metrics.fbd import FBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
-from models import BaseModel, TexyGen, LeakGan, TextGan
-from utils.path_configs import MODEL_PATH, EXPORT_PATH
+from the_new_models import BaseModel, TexyGen, LeakGan, TextGan
+from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
+    load_json
 from utils.nltk_utils import tokenize
+from utils.path_configs import MODEL_PATH, EXPORT_PATH
 
 
 def create_model(model_name, parser):
@@ -40,12 +40,10 @@ class Evaluator:
         self.init_metrics(mode)
 
     def init_dataset(self):
-        train_data = self.data_manager.get_training_data(self.k, unpack=True)
-        valid_data = self.data_manager.get_validation_data(self.k, unpack=True)
-        self.train_loc = self.data_manager.dump_unpacked_data_on_file(train_data, self.dm_name + '-train-k'
-                                                                      + str(self.k))
-        self.valid_loc = self.data_manager.dump_unpacked_data_on_file(valid_data, self.dm_name + '-valid-k'
-                                                                      + str(self.k))
+        self.train_data = self.data_manager.get_parser(). \
+            id_format2line(self.data_manager.get_training_data(self.k, unpack=True)[1])  # without start token
+        self.valid_data = self.data_manager.get_parser(). \
+            id_format2line(self.data_manager.get_validation_data(self.k, unpack=True)[1])  # without start token
 
     def init_metrics(self, mode):
         pass
@@ -75,8 +73,9 @@ class Evaluator:
                 dumper.restore_model(restore_type)
 
                 sample_lines = model.generate_samples(self.test_n_sampling)
-                valid_lines = self.data_manager.get_parsed_unpacked_data(
-                    self.data_manager.get_validation_data(k=self.k, unpack=True))
+                max_n_samples = max(len(sample_lines), max(self.valid_data))
+                sample_lines = sample_lines[:max_n_samples]
+                valid_lines = self.valid_data[:max_n_samples]
                 additional_fields = self.get_sample_additional_fields(model, sample_lines, valid_lines, restore_type)
                 dumper.dump_samples_with_additional_fields(sample_lines,
                                                            additional_fields['gen'],
@@ -114,18 +113,16 @@ class RealWorldEvaluator(Evaluator):
 
     def init_metrics(self, mode):
         if mode == 'train':
-            id_format_valid_tokenized = tokenize(read_text(self.valid_loc, True))
-            valid_texts = self.data_manager.get_parser().id_format2line(id_format_valid_tokenized, True)
-            # valid_texts = list(np.random.choice(valid_texts, 1000, replace=False))
-            valid_tokens = tokenize(valid_texts)
+            # valid_texts = list(np.random.choice(self.valid_data, 1000, replace=False))
+            # valid_tokens = tokenize(valid_texts)
+            valid_tokens = tokenize(self.valid_data)
             self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
             self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
             self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
         if mode == 'test':
-            id_format_valid_tokenized = tokenize(read_text(self.valid_loc, True))
-            valid_texts = self.data_manager.get_parser().id_format2line(id_format_valid_tokenized, True)
-            # valid_texts = list(np.random.choice(valid_texts, 1000, replace=False))
-            valid_tokens = tokenize(valid_texts)
+            # valid_texts = list(np.random.choice(self.valid_data, 1000, replace=False))
+            # valid_tokens = tokenize(valid_texts)
+            valid_tokens = tokenize(self.valid_data)
             self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
             self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
             self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
@@ -134,7 +131,7 @@ class RealWorldEvaluator(Evaluator):
             self.jaccard4 = MSJaccard(valid_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard3 = MSJaccard(valid_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard2 = MSJaccard(valid_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-            self.fbd = FBD(valid_texts)
+            self.fbd = FBD(self.valid_data)
         if mode == 'gen':
             pass
 
@@ -149,24 +146,16 @@ class RealWorldEvaluator(Evaluator):
     def get_during_training_scores(self, model: BaseModel):
         new_samples = tokenize(model.generate_samples(self.during_training_n_sampling))
         new_scores = {
-            'bleu3': self.bleu3.get_score(new_samples),
-            'bleu4': self.bleu4.get_score(new_samples),
-            'bleu5': self.bleu5.get_score(new_samples),
+            'bleu3': np.mean(self.bleu3.get_score(new_samples)),
+            'bleu4': np.mean(self.bleu4.get_score(new_samples)),
+            'bleu5': np.mean(self.bleu5.get_score(new_samples)),
             '-nll': -float(model.get_nll())
         }
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_lines, valid_lines, restore_type):
-        id_format_lines = np.array(self.data_manager.get_parser().line2id_format(sample_lines)[0])
-        print(id_format_lines.shape)
-        id_format_sample_loc = self.data_manager.dump_unpacked_data_on_file(
-            (None, id_format_lines, None),
-            self.dm_name + '-temp_{}-{}-k'.format(model.get_name(), restore_type) + str(self.k),
-            parse=False)
-
-        logqfromp = np.array(model.get_persample_ll(self.valid_loc))
-        logqfromq = np.array(model.get_persample_ll(id_format_sample_loc))
-        delete_file(id_format_sample_loc)
+        logqfromp = np.array(model.get_persample_ll(valid_lines))
+        logqfromq = np.array(model.get_persample_ll(sample_lines))
         return {'gen': {'logqfromq': logqfromq}, 'valid': {'logqfromp': logqfromp}}
 
     def get_test_scores(self, dumper, restore_type):
@@ -201,7 +190,7 @@ class RealWorldEvaluator(Evaluator):
             'fbd': self.fbd.get_score(samples)
         }
         for key in scores_persample:
-            scores_mean[key] = float(np.mean(scores_persample[key]))
+            scores_mean[key] = np.mean(scores_persample[key])
         return scores_persample, scores_mean
 
 
@@ -233,23 +222,15 @@ class OracleEvaluator(Evaluator):
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_lines, valid_lines, restore_type):
-        id_format_lines = np.array(self.data_manager.get_parser().line2id_format(sample_lines)[0])
-        print(id_format_lines.shape)
         sample_tokens = tokenize(sample_lines)
         sample_tokens = [[int(vv) for vv in v] for v in sample_tokens]
-        valid_tokens = tokenize(self.data_manager.get_parsed_unpacked_data(
-            self.data_manager.get_validation_data(k=self.k, unpack=True)))
+        valid_tokens = tokenize(valid_lines)
         valid_tokens = [[int(vv) for vv in v] for v in valid_tokens][:len(sample_tokens)]
 
-        id_format_sample_loc = self.data_manager.dump_unpacked_data_on_file(
-            (None, id_format_lines, None),
-            self.dm_name + '-temp_{}-{}-k'.format(model.get_name(), restore_type) + str(self.k),
-            parse=False)
-
-        logqfromp = np.array(model.get_persample_ll(self.valid_loc))
-        logqfromq = np.array(model.get_persample_ll(id_format_sample_loc))
-        logpfromq = np.array(self.oracle.log_probability(sample_tokens))
+        logqfromp = np.array(model.get_persample_ll(valid_lines))
+        logqfromq = np.array(model.get_persample_ll(sample_lines))
         logpfromp = np.array(self.oracle.log_probability(valid_tokens))
+        logpfromq = np.array(self.oracle.log_probability(sample_tokens))
         return {'gen': {'logqfromq': logqfromq, 'logpfromq': logpfromq},
                 'valid': {'logqfromp': logqfromp, 'logpfromp': logpfromp}}
 
@@ -347,9 +328,9 @@ class BestModelTracker:
         self.dumper = Dumper(self.model, k, evaluator.dm_name)
         self.evaluator = evaluator
         self.best_history = self.evaluator.get_initial_scores_during_training()
-        self.model.set_dumper(self)
+        self.model.set_tracker(self)
         self.model.delete_saved_model()
-        self.model.set_train_val_loc(self.evaluator.train_loc, self.evaluator.valid_loc)
+        self.model.set_train_val_data(self.evaluator.train_data, self.evaluator.valid_data)
 
     def update_scores(self, epoch=0, last_iter=False):
         if last_iter:
