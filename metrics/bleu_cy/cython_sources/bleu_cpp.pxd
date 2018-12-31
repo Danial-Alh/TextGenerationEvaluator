@@ -9,5 +9,5 @@ cdef extern from "./../cpp_sources/bleu.cpp":
 cdef extern from "./../cpp_sources/bleu.h":
     cdef cppclass BLEU_CPP:
         BLEU_CPP() nogil except +
-        BLEU_CPP(vector[vector[string]], float *, int, int, bool) nogil except +
+        BLEU_CPP(vector[vector[string]], float *, int, int, bool, BLEU_CPP*) nogil except +
         void get_score(vector[vector[string]], double*) nogil except +

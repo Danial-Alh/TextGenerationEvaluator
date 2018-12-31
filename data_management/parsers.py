@@ -247,6 +247,11 @@ class Parser2(PersistentClass):
             return [convert(l) for l in id_format_lines]
         return convert(id_format_lines)
 
+    def tokens2lines(self, tokens):
+        if isinstance(tokens[0], str):
+            return self.vocab_separator_character.join(tokens)
+        return [self.vocab_separator_character.join(t) for t in tokens]
+
 
 class CharacterBasedParser(Parser):
     def __init__(self, lines, name):

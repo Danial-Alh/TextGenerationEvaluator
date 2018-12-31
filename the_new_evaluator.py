@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 from data_management.data_manager import SentenceDataManager, OracleDataManager
-from metrics.bleu import Bleu
+from metrics.bleu_cy.lib.bleu import Bleu
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from metrics.self_bleu import SelfBleu
@@ -136,14 +136,14 @@ class RealWorldEvaluator(Evaluator):
         elif mode == 'eval':
             # valid_texts = list(np.random.choice(self.valid_data, 1000, replace=False))
             self.bleu5 = Bleu(self.valid_data, weights=np.ones(5) / 5.)
-            self.bleu4 = Bleu(self.valid_data, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
-            self.bleu3 = Bleu(self.valid_data, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
-            self.bleu2 = Bleu(self.valid_data, weights=np.ones(2) / 2., cached_fields=self.bleu5.get_cached_fields())
+            self.bleu4 = Bleu(self.valid_data, weights=np.ones(4) / 4., other_instance=self.bleu5)
+            self.bleu3 = Bleu(self.valid_data, weights=np.ones(3) / 3., other_instance=self.bleu5)
+            self.bleu2 = Bleu(self.valid_data, weights=np.ones(2) / 2., other_instance=self.bleu5)
             self.jaccard5 = MSJaccard(self.valid_data, 5)
             self.jaccard4 = MSJaccard(self.valid_data, 4, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard3 = MSJaccard(self.valid_data, 3, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard2 = MSJaccard(self.valid_data, 2, cached_fields=self.jaccard5.get_cached_fields())
-            # self.fbd = FBD(self.valid_data)
+            # self.fbd = FBD(self.data_manager.get_parser().tokens2lines(self.valid_data))
         elif mode == 'gen':
             pass
         else:
@@ -201,7 +201,7 @@ class RealWorldEvaluator(Evaluator):
             'jaccard4': self.jaccard4.get_score(samples, cache=jaccard_cache),
             'jaccard3': self.jaccard3.get_score(samples, cache=jaccard_cache),
             'jaccard2': self.jaccard2.get_score(samples, cache=jaccard_cache),
-            # 'fbd': self.fbd.get_score(samples)
+            # 'fbd': self.fbd.get_score(self.data_manager.get_parser().tokens2lines(samples))
         }
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
@@ -312,14 +312,12 @@ class Dumper:
 
     def dump_samples_with_additional_fields(self, samples, additional_fields: dict, load_key, sample_label):
         dump_json([
-            {**{'text': ' '.join(samples[i])}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
+            {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
             sample_label + '_' + load_key + '_based_samples', self.saving_path)
 
     def load_samples_with_additional_fields(self, load_key, sample_label):
         result = load_json(sample_label + '_' + load_key + '_based_samples', self.saving_path)
-        for r in result:
-            r['text'] = r['text'].split(' ')
         return result
 
     def dump_final_results(self, results, restore_type):
