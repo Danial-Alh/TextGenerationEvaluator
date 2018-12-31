@@ -3,10 +3,10 @@ import os
 import numpy as np
 
 from data_management.data_manager import SentenceDataManager, OracleDataManager
-from metrics.bleu_cy.lib.bleu import Bleu
+from metrics.cythonics.lib.bleu import Bleu
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
-from metrics.self_bleu import SelfBleu
+from metrics.cythonics.lib.self_bleu import SelfBleu
 from the_new_models import BaseModel, TexyGen, LeakGan, TextGan, DGSAN
 from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
@@ -188,12 +188,9 @@ class RealWorldEvaluator(Evaluator):
             'bleu4': self.bleu4.get_score(samples),
             'bleu5': self.bleu5.get_score(samples),
             'self_bleu5': self_bleu5.get_score(),
-            'self_bleu4': SelfBleu(subsamples, weights=np.ones(4) / 4.,
-                                   cached_fields=self_bleu5.get_cached_fields()).get_score(),
-            'self_bleu3': SelfBleu(subsamples, weights=np.ones(3) / 3.,
-                                   cached_fields=self_bleu5.get_cached_fields()).get_score(),
-            'self_bleu2': SelfBleu(subsamples, weights=np.ones(2) / 2.,
-                                   cached_fields=self_bleu5.get_cached_fields()).get_score(),
+            'self_bleu4': SelfBleu(subsamples, weights=np.ones(4) / 4., other_instance=self_bleu5).get_score(),
+            'self_bleu3': SelfBleu(subsamples, weights=np.ones(3) / 3., other_instance=self_bleu5).get_score(),
+            'self_bleu2': SelfBleu(subsamples, weights=np.ones(2) / 2., other_instance=self_bleu5).get_score(),
             '-nll': [r['lnq'] for r in refs_with_additional_fields]
         }
         scores_mean = {
