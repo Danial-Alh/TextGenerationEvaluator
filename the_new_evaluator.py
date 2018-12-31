@@ -34,7 +34,7 @@ class Evaluator:
         self.dm_name = dm_name
         self.data_manager = data_manager
         self.during_training_n_sampling = 5000
-        self.test_n_sampling = 1000
+        self.test_n_sampling = 20000
         self.test_restore_types = None
 
         self.init_dataset()
@@ -125,7 +125,7 @@ class RealWorldEvaluator(Evaluator):
     def __init__(self, data_manager: SentenceDataManager, mode, k=0, dm_name=''):
         super().__init__(data_manager, mode, k, dm_name)
         self.test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
-        self.selfbleu_sample_size = 50
+        self.selfbleu_sample_size = 5000
 
     def init_metrics(self, mode):
         if mode == 'train':
