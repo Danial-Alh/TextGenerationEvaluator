@@ -5,7 +5,6 @@ from ...models.leakgan.LeakganGenerator import Generator
 from ...models.leakgan.LeakganReward import Reward
 from ...utils.metrics.Nll import Nll
 from ...utils.oracle.OracleLstm import OracleLstm
-from ...utils.text_process import load_or_create_dictionary
 from ...utils.utils import *
 
 
@@ -369,24 +368,12 @@ class Leakgan(Gan):
                 print('epoch:' + str(epoch) + '--' + str(epoch_))
                 self.train_discriminator()
 
-    def init_real_trainng(self, data_loc=None, parser=None):
-        from ...utils.text_process import text_precess, text_to_code
-        from ...utils.text_process import get_tokenlized
-        tokens = get_tokenlized(data_loc)
-        if parser is not None:
-            self.sequence_length, self.vocab_size = parser.max_length, parser.vocab.shape[0]
-            word_index_dict, index_word_dict = parser.vocab2id, parser.id2vocab,
-            self.start_token, self.end_token = parser.START_TOKEN_ID, parser.END_TOKEN_ID
-            import shutil
-            shutil.copy(data_loc, self.oracle_file)
-            print('parser set from outside!')
-        else:
-            self.start_token, self.end_token = 0, 0
-            self.sequence_length, self.vocab_size = text_precess(data_loc)
-            dictionaries_name = data_loc.split('/')[-1].split('.')[0] + '_dictionaries'
-            [word_index_dict, index_word_dict] = load_or_create_dictionary(tokens, self.saving_path, dictionaries_name)
-            with open(self.oracle_file, 'w') as outfile:
-                outfile.write(text_to_code(tokens, word_index_dict, self.sequence_length))
+    def init_real_trainng(self, parser=None):
+        assert parser is not None
+        self.sequence_length, self.vocab_size = parser.max_length, parser.vocab.shape[0]
+        word_index_dict, index_word_dict = parser.vocab2id, parser.id2vocab,
+        self.start_token, self.end_token = parser.START_TOKEN_ID, parser.END_TOKEN_ID
+        print('parser set from outside!')
 
         goal_out_size = sum(self.num_filters)
         discriminator = Discriminator(sequence_length=self.sequence_length, num_classes=2, vocab_size=self.vocab_size,
@@ -415,11 +402,11 @@ class Leakgan(Gan):
     def train_real(self, data_loc=None, wrapper_ref=None):
         from ...utils.text_process import code_to_text
         from ...utils.text_process import get_tokenlized
-        if wrapper_ref is None:
-            wi_dict, iw_dict = self.init_real_trainng(data_loc)
-        else:
-            self.wrapper = wrapper_ref
-            wi_dict, iw_dict = self.wrapper.parser.vocab2id, self.wrapper.parser.id2vocab
+        assert wrapper_ref is not None
+        self.wrapper = wrapper_ref
+        import shutil
+        shutil.copy(data_loc, self.oracle_file)
+        wi_dict, iw_dict = self.wrapper.parser.vocab2id, self.wrapper.parser.id2vocab
         self.init_real_metric()
 
         def get_real_test_file(dict=iw_dict):

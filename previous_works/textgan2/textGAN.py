@@ -253,10 +253,8 @@ def textGAN(x, opt):
 
 
 class TextGANMMD:
-    def __init__(self, wrapper, parser, train_data, valid_data):
+    def __init__(self, wrapper, parser):
         self.wrapper = wrapper
-        self.train = train_data
-        self.val = valid_data
         self.ixtoword = parser.id2vocab
         self.opt = Options(parser.vocab.shape[0], parser.max_length)
         try:
@@ -313,7 +311,9 @@ class TextGANMMD:
                 print("No saving session, using random initialization")
                 self.sess.run(tf.global_variables_initializer())
 
-    def train_func(self):
+    def train_func(self, train_data, valid_data):
+        self.train = train_data
+        self.val = valid_data
         for epoch in range(self.opt.max_epochs):
             print("Starting epoch %d" % epoch)
             # if epoch >= 10:

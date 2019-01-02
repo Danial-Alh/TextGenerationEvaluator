@@ -6,7 +6,7 @@ from nltk.translate.bleu_score import ngrams
 from tqdm import tqdm
 
 
-def tokenize(lines, tokenizer=nltk.word_tokenize, compute_in_parallel=False):
+def word_base_tokenize(lines, tokenizer=nltk.word_tokenize, compute_in_parallel=False):
     if isinstance(lines, str):
         return nltk.word_tokenize(lines)
     if compute_in_parallel:

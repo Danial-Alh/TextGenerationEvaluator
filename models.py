@@ -2,7 +2,7 @@ from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import SentenceDataManager
 from data_management.parsers import Parser
 from utils.file_handler import write_text, read_text
-from utils.nltk_utils import tokenize
+from utils.nltk_utils import word_base_tokenize
 
 
 class BaseModel:
@@ -233,8 +233,8 @@ class TextGan(BaseModel):
     def set_train_val_loc(self, train_loc, valid_loc):
         from previous_works.textgan2.textGAN import TextGANMMD
         import numpy as np
-        train_data = np.array(tokenize(read_text(train_loc, True)))[:, :-1]
-        valid_data = np.array(tokenize(read_text(valid_loc, True)))[:, :-1]
+        train_data = np.array(word_base_tokenize(read_text(train_loc, True)))[:, :-1]
+        valid_data = np.array(word_base_tokenize(read_text(valid_loc, True)))[:, :-1]
         self.model = TextGANMMD(self, self.parser, train_data, valid_data)
 
     def train(self):
