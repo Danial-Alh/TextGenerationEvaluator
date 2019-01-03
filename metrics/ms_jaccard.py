@@ -16,6 +16,7 @@ class MSJaccard:
             self.ref_ngrams = self._get_ngrams(references)
         else:
             self.ref_ngrams, = cached_fields
+            assert len(self.ref_ngrams) >= self.max_n, 'invalid cache!'
             self.ref_ngrams = self.ref_ngrams[:self.max_n]
 
     def get_cached_fields(self):
@@ -40,6 +41,7 @@ class MSJaccard:
                             for i in range(self.max_n)]  # union:  max(c[x], d[x])
         else:
             ngrams_intersection, ngrams_union = cache
+            assert len(ngrams_intersection) >= self.max_n and len(ngrams_union) >= self.max_n, 'invalid cache!'
             ngrams_intersection, ngrams_union = ngrams_intersection[:self.max_n], ngrams_union[:self.max_n]
         result = np.power(reduce(lambda x, y: x * y,
                                  [float(sum(ngrams_intersection[i].values())) / sum(ngrams_union[i].values()) for i in

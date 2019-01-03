@@ -5,7 +5,6 @@
 #include <stdexcept>
 #include <limits>
 #include "self_bleu.h"
-#include "tqdm/tqdm.h"
 #include "counter.cpp"
 #include "nltk.cpp"
 
@@ -42,6 +41,10 @@ SELF_BLEU_CPP::~SELF_BLEU_CPP()
     for (int n = 0; n < this->max_n; n++)
         delete this->reference_max_counts[n];
     delete[] this->reference_max_counts;
+
+    for (int n = 0; n < this->max_n; n++)
+        delete this->reference_max2_counts[n];
+    delete[] this->reference_max2_counts;
 }
 
 SELF_BLEU_CPP::SELF_BLEU_CPP(vector<vector<string>> lines_of_tokens, float weights[],

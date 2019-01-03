@@ -3,8 +3,9 @@ import os
 import numpy as np
 from metrics.cythonics.lib.bleu import Bleu
 from metrics.cythonics.lib.self_bleu import SelfBleu
+# from metrics.bleu import Bleu
+# from metrics.self_bleu import SelfBleu
 
-from data_management.parsers import Parser
 from metrics.fbd import FBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
@@ -121,7 +122,7 @@ class RealWorldEvaluator(Evaluator):
     def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
         self.test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
-        self.selfbleu_sample_size = 50
+        self.selfbleu_n_sampling = -1
 
     def init_metrics(self, mode):
         if mode == 'train':
@@ -175,8 +176,11 @@ class RealWorldEvaluator(Evaluator):
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
 
-        subsamples_mask = np.random.choice(range(len(sample_tokens)), self.selfbleu_sample_size, replace=False)
-        subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
+        if self.selfbleu_n_sampling == -1:
+            subsampled_tokens = sample_tokens
+        else:
+            subsamples_mask = np.random.choice(range(len(sample_tokens)), self.selfbleu_n_sampling, replace=False)
+            subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
 
         self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
         jaccard5_score, jaccard_cache = self.jaccard5.get_score(sample_tokens, return_cache=True)
