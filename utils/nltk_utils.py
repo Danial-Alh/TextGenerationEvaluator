@@ -22,7 +22,7 @@ class Ngram:
         return (list(ngrams(x, self.n)) if len(x) >= self.n else [])
 
 
-def get_ngrams(sentences, n, use_pool_thread=True):
+def get_ngrams(sentences, n, use_pool_thread=False):
     ng = Ngram(n)
     if use_pool_thread:
         local_ngramgs = Threader(sentences, ng.tmp_ngram).run()

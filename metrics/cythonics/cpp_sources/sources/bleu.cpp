@@ -54,7 +54,7 @@ BLEU_CPP::BLEU_CPP(vector<vector<string>> lines_of_tokens, float weights[],
     this->references_counts = new Counter **[max_n];
     for (int i = 0; i < max_n; i++)
         this->references_counts[i] = new Counter *[lines_of_tokens.size()];
-    this->reference_max_counts = new map<string, int> *[max_n];
+    this->reference_max_counts = new CustomMap *[max_n];
 
     this->ref_lens = new int[lines_of_tokens.size()];
     this->weights = weights;
@@ -86,17 +86,17 @@ BLEU_CPP::BLEU_CPP(vector<vector<string>> lines_of_tokens, float weights[],
                 this->references_counts[n][i] = new Counter(this->references_ngrams[n][i]);
         else
             for (int i = 0; i < this->number_of_refs; i++)
-                this->references_counts[n][i] = new Counter(other_instance->references_counts[n][i]);
+                this->references_counts[n][i] = new Counter(*other_instance->references_counts[n][i]);
     }
     for (int n = 0; n < max_n; n++)
     {
         if (other_instance == NULL || n >= other_instance->max_n)
         {
-            this->reference_max_counts[n] = new map<string, int>();
+            this->reference_max_counts[n] = new CustomMap();
             this->get_max_counts(n);
         }
         else
-            this->reference_max_counts[n] = new map<string, int>(*(other_instance->reference_max_counts[n]));
+            this->reference_max_counts[n] = new CustomMap(*(other_instance->reference_max_counts[n]));
     }
 }
 
@@ -109,23 +109,22 @@ void BLEU_CPP::get_max_counts(int n)
                 ngram_keys.push_back(ng);
     cout << n + 1 << "grams: " << ngram_keys.size() << endl;
 
-    for (string &ng : ngram_keys)
-        (*reference_max_counts[n])[ng] = 0;
-
+    int temp_max_counts[ngram_keys.size()];
 #pragma omp parallel
     {
 #pragma omp for schedule(guided)
         for (int i = 0; i < (int)ngram_keys.size(); i++)
         {
             string &ng = ngram_keys[i];
-            int *counts = new int[number_of_refs];
+            int counts[number_of_refs];
             for (int j = 0; j < number_of_refs; j++)
-                counts[j] = references_counts[n][j]->get(ng, 0);
+                counts[j] = references_counts[n][j]->get(ng);
             int max_value = *max_element(counts, counts + number_of_refs);
-            (*reference_max_counts[n])[ng] = max_value;
-            delete[] counts;
+            temp_max_counts[i] = max_value;
         }
     }
+    for (int i = 0; i < (int)ngram_keys.size(); i++)
+        (*reference_max_counts[n])[ngram_keys[i]] = temp_max_counts[i];
 }
 
 void BLEU_CPP::get_score(vector<vector<string>> hypotheses, double *results)

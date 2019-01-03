@@ -4,7 +4,6 @@ from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import OracleDataManager, SentenceDataManager
 from data_management.parsers import WordBasedParser, OracleBasedParser
 from the_new_evaluator import RealWorldEvaluator, BestModelTracker, OracleEvaluator, Dumper, create_model
-from utils.file_handler import write_text
 
 
 def do(ParserClass, DataManagerClass, EvaluatorClass):

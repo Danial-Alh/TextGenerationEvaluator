@@ -122,7 +122,7 @@ class RealWorldEvaluator(Evaluator):
     def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
         self.test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
-        self.selfbleu_n_sampling = -1
+        self.selfbleu_n_sampling = 5000
 
     def init_metrics(self, mode):
         if mode == 'train':

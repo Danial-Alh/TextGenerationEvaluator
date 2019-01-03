@@ -58,8 +58,8 @@ SELF_BLEU_CPP::SELF_BLEU_CPP(vector<vector<string>> lines_of_tokens, float weigh
     this->references_counts = new Counter **[max_n];
     for (int i = 0; i < max_n; i++)
         this->references_counts[i] = new Counter *[lines_of_tokens.size()];
-    this->reference_max_counts = new map<string, int> *[max_n];
-    this->reference_max2_counts = new map<string, int> *[max_n];
+    this->reference_max_counts = new CustomMap *[max_n];
+    this->reference_max2_counts = new CustomMap *[max_n];
 
     this->ref_lens = new int[lines_of_tokens.size()];
     this->weights = weights;
@@ -91,20 +91,20 @@ SELF_BLEU_CPP::SELF_BLEU_CPP(vector<vector<string>> lines_of_tokens, float weigh
                 this->references_counts[n][i] = new Counter(this->references_ngrams[n][i]);
         else
             for (int i = 0; i < this->number_of_refs; i++)
-                this->references_counts[n][i] = new Counter(other_instance->references_counts[n][i]);
+                this->references_counts[n][i] = new Counter(*other_instance->references_counts[n][i]);
     }
     for (int n = 0; n < max_n; n++)
     {
         if (other_instance == NULL || n >= other_instance->max_n)
         {
-            this->reference_max_counts[n] = new map<string, int>();
-            this->reference_max2_counts[n] = new map<string, int>();
+            this->reference_max_counts[n] = new CustomMap();
+            this->reference_max2_counts[n] = new CustomMap();
             this->get_max_counts(n);
         }
         else
         {
-            this->reference_max_counts[n] = new map<string, int>(*(other_instance->reference_max_counts[n]));
-            this->reference_max2_counts[n] = new map<string, int>(*(other_instance->reference_max2_counts[n]));
+            this->reference_max_counts[n] = new CustomMap(*(other_instance->reference_max_counts[n]));
+            this->reference_max2_counts[n] = new CustomMap(*(other_instance->reference_max2_counts[n]));
         }
     }
 }
@@ -118,11 +118,8 @@ void SELF_BLEU_CPP::get_max_counts(int n)
                 ngram_keys.push_back(ng);
     cout << n + 1 << "grams: " << ngram_keys.size() << endl;
 
-    for (string &ng : ngram_keys)
-    {
-        (*reference_max_counts[n])[ng] = 0;
-        (*reference_max2_counts[n])[ng] = 0;
-    }
+    int temp_max_counts[ngram_keys.size()];
+    int temp_max2_counts[ngram_keys.size()];
 
 #pragma omp parallel
     {
@@ -130,16 +127,22 @@ void SELF_BLEU_CPP::get_max_counts(int n)
         for (int i = 0; i < (int)ngram_keys.size(); i++)
         {
             string &ng = ngram_keys[i];
-            int *counts = new int[number_of_refs];
+            int counts[number_of_refs];
             for (int j = 0; j < number_of_refs; j++)
-                counts[j] = references_counts[n][j]->get(ng, 0);
+                counts[j] = references_counts[n][j]->get(ng);
             int *max_value_ptr = max_element(counts, counts + number_of_refs);
-            (*reference_max_counts[n])[ng] = *max_value_ptr;
+            temp_max_counts[i] = *max_value_ptr;
             (*max_value_ptr) = -1;
             int max_value = *max_element(counts, counts + number_of_refs);
-            (*reference_max2_counts[n])[ng] = max_value;
-            delete[] counts;
+            temp_max2_counts[i] = max_value;
         }
+    }
+
+    for (int i = 0; i < (int)ngram_keys.size(); i++)
+    {
+        string &ng = ngram_keys[i];
+        (*reference_max_counts[n])[ng] = temp_max_counts[i];
+        (*reference_max2_counts[n])[ng] = temp_max2_counts[i];
     }
 }
 
@@ -151,9 +154,9 @@ void SELF_BLEU_CPP::get_score(double *results)
 
     vector<string> *refs[number_of_refs - 1];
     int lens[number_of_refs - 1];
-    map<string, int> *ref_max_counts[max_n];
+    CustomMap *ref_max_counts[max_n];
     for (int n = 0; n < max_n; n++)
-        ref_max_counts[n] = new map<string, int>(*(reference_max_counts[n]));
+        ref_max_counts[n] = new CustomMap(*(reference_max_counts[n]));
 
     for (int i = 0; i < number_of_refs; i++)
     {
@@ -179,8 +182,8 @@ void SELF_BLEU_CPP::get_score(double *results)
             for (pair<string, int> const &p : *(references_counts[n][i]))
             {
                 string const &ng = p.first;
-                if ((*(reference_max_counts[n]))[ng] == (*(references_counts[n][i]))[ng])
-                    (*(ref_max_counts[n]))[ng] = (*(reference_max2_counts[n]))[ng];
+                if (reference_max_counts[n]->get(ng) == references_counts[n][i]->get(ng))
+                    (*ref_max_counts[n])[ng] = reference_max2_counts[n]->get(ng);
             }
         vector<string> *hypothesis = references[i];
         results[i] = corpus_bleu(number_of_refs, max_n,
@@ -195,7 +198,7 @@ void SELF_BLEU_CPP::get_score(double *results)
             for (pair<string, int> const &p : *(references_counts[n][i]))
             {
                 string const &ng = p.first;
-                (*(ref_max_counts[n]))[ng] = (*(reference_max_counts[n]))[ng];
+                (*ref_max_counts[n])[ng] = reference_max_counts[n]->get(ng);
             }
     }
 

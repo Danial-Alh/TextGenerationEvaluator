@@ -1,13 +1,15 @@
 #include <vector>
 #include <string>
-#include <map>
 #include <cmath>
 #include <utility>
 #include <numeric>
 #include <algorithm>
 #include <tuple>
-#include "fraction.cpp"
+#include "custmap.h"
 #include "counter.h"
+#include "fraction.cpp"
+#include "custmap.cpp"
+
 
 using namespace std;
 
@@ -48,22 +50,22 @@ void smooth_1(int size, Fraction *p_n)
         }
 }
 
-Fraction modified_precision(map<string, int> **reference_max_counts,
+Fraction modified_precision(CustomMap **reference_max_counts,
                             vector<string> *hypothesis, int n)
 {
     vector<string> *hyp_ngrams = get_ngrams(hypothesis, n);
     Counter counts = Counter(hyp_ngrams);
-    map<string, int> &max_counts = *(reference_max_counts[n - 1]);
+    CustomMap &max_counts = *(reference_max_counts[n - 1]);
 
     int numerator = 0;
     int denominator = 0;
 
     for (pair<string, int> const &p : counts)
-        denominator += counts[p.first];
+        denominator += counts.get(p.first);
     denominator = max(1, denominator);
 
     for (pair<string, int> const &p : counts)
-        numerator += min(counts[p.first], max_counts[p.first]);
+        numerator += min(counts.get(p.first), max_counts.get(p.first));
 
     delete hyp_ngrams;
     return Fraction(numerator, denominator);
@@ -91,7 +93,7 @@ double brevity_penalty(int closest_ref_len, int hyp_len)
 double corpus_bleu(int num_refs, int max_n,
                    vector<string> **references,
                    vector<string> *hypothesis,
-                   map<string, int> **reference_max_counts,
+                   CustomMap **reference_max_counts,
                    int *ref_lens,
                    float *weights,
                    int smoothing_function,
