@@ -3,8 +3,6 @@ import os
 import numpy as np
 from metrics.cythonics.lib.bleu import Bleu
 from metrics.cythonics.lib.self_bleu import SelfBleu
-# from metrics.bleu import Bleu
-# from metrics.self_bleu import SelfBleu
 
 from metrics.fbd import FBD
 from metrics.ms_jaccard import MSJaccard
@@ -13,7 +11,15 @@ from the_new_models import BaseModel, TexyGen, LeakGan, TextGan, DGSAN
 from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
 from utils.nltk_utils import word_base_tokenize
-from utils.path_configs import MODEL_PATH, EXPORT_PATH
+from utils.path_configs import MODEL_PATH, EXPORT_PATH, ROOT_PATH
+
+
+# from metrics.bleu import Bleu
+# from metrics.self_bleu import SelfBleu
+
+
+# from metrics.bleu import Bleu
+# from metrics.self_bleu import SelfBleu
 
 
 def create_model(model_name, parser):
@@ -39,7 +45,6 @@ class Evaluator:
         self.dm_name = dm_name
         self.during_training_n_sampling = 5000
         self.test_n_sampling = 20000
-        self.test_restore_types = None
 
         self.init_metrics(mode)
 
@@ -119,9 +124,10 @@ class Evaluator:
 
 
 class RealWorldEvaluator(Evaluator):
+    test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
+
     def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
-        self.test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
         self.selfbleu_n_sampling = 5000
 
     def init_metrics(self, mode):
@@ -140,7 +146,7 @@ class RealWorldEvaluator(Evaluator):
             self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-            # self.fbd = FBD(self.test_data)
+            self.fbd = FBD(self.test_data, 64, ROOT_PATH + "../data/bert_models/uncased_L-12_H-768_A-12/")
         elif mode == 'gen':
             pass
         else:
@@ -200,7 +206,7 @@ class RealWorldEvaluator(Evaluator):
             'jaccard4': self.jaccard4.get_score(sample_tokens, cache=jaccard_cache),
             'jaccard3': self.jaccard3.get_score(sample_tokens, cache=jaccard_cache),
             'jaccard2': self.jaccard2.get_score(sample_tokens, cache=jaccard_cache),
-            # 'fbd': self.fbd.get_score(sample_lines)
+            'fbd': self.fbd.get_score(sample_lines)
         }
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
@@ -208,9 +214,10 @@ class RealWorldEvaluator(Evaluator):
 
 
 class OracleEvaluator(Evaluator):
+    test_restore_types = ['-nll_oracle', 'last_iter']
+
     def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
-        self.test_restore_types = ['-nll_oracle', 'last_iter']
 
     def init_metrics(self, mode):
         if mode == 'train':
@@ -300,13 +307,13 @@ class Dumper:
     def dump_generated_samples(self, samples, load_key):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, load_key + '_based_samples'), is_complete_path=True)
+        write_text(samples, os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
 
     def load_generated_samples(self, load_key):
-        return read_text(os.path.join(self.saving_path, load_key + '_based_samples'), is_complete_path=True)
+        return read_text(os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
 
     def get_generated_samples_path(self, load_key):
-        return os.path.join(self.saving_path, load_key + '_based_samples')
+        return os.path.join(self.saving_path, load_key + '_based_samples.txt')
 
     def dump_best_history(self, best_history):
         dump_json(best_history, 'best_history', self.saving_path)
