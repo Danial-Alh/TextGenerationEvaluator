@@ -1,74 +1,303 @@
 import os
 
 import numpy as np
+from metrics.cythonics.lib.bleu import Bleu
+from metrics.cythonics.lib.self_bleu import SelfBleu
 
-from data_management.data_loaders import SentenceDataloader
-from data_management.data_manager import SentenceDataManager, OracleDataManager
+from metrics.fbd import FBD
+from metrics.ms_jaccard import MSJaccard
+from metrics.oracle.oracle_lstm import Oracle_LSTM
+from models import BaseModel
+from models import all_models, create_model
 from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
-from metrics.oracle.oracle_lstm import Oracle_LSTM
-from metrics.self_bleu import SelfBleu
-from models import BaseModel, TexyGen, LeakGan, TextGan
-from utils.path_configs import MODEL_PATH, EXPORT_PATH
-from utils import tokenize
+from utils.nltk_utils import word_base_tokenize
+from utils.path_configs import MODEL_PATH, EXPORT_PATH, ROOT_PATH
 
 
 class Evaluator:
-    def __init__(self, data_manager: SentenceDataManager, k=0, name='', init_data=True):
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
+        # in train and gen mode, data is coded but in eval mode data is raw
+        self.parser = parser
+        self.train_data = train_data
+        self.valid_data = valid_data
+        self.test_data = test_data
         self.k = k
-        self.name = name
-        self.data_manager = data_manager
-        self.init_dataset()
-        if init_data:
-            self.init_metrics()
+        self.dm_name = dm_name
+        self.during_training_n_sampling = 5000
+        self.test_n_sampling = 20000
 
-    def init_dataset(self):
-        train_data = self.data_manager.get_training_data(self.k, unpack=True)
-        valid_data = self.data_manager.get_validation_data(self.k, unpack=True)
-        self.train_loc = self.data_manager.dump_unpacked_data_on_file(train_data, self.name + '-train-k' + str(self.k))
-        self.valid_loc = self.data_manager.dump_unpacked_data_on_file(valid_data, self.name + '-valid-k' + str(self.k))
+        self.init_metrics(mode)
 
-    def init_metrics(self):
-        id_format_valid_tokenized = tokenize(read_text(self.valid_loc, True))
-        valid_texts = self.data_manager.get_parser().id_format2line(id_format_valid_tokenized, True)
-        # valid_texts = list(np.random.choice(valid_texts, 1000, replace=False))
-        valid_tokens = tokenize(valid_texts)
-        # self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
-        # self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
-        # self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., cached_fields=self.bleu5.get_cached_fields())
-        # self.bleu2 = Bleu(valid_tokens, weights=np.ones(2) / 2., cached_fields=self.bleu5.get_cached_fields())
-        # self.jaccard5 = MSJaccard(valid_tokens, 5)
-        # self.jaccard4 = MSJaccard(valid_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
-        # self.jaccard3 = MSJaccard(valid_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
-        # self.jaccard2 = MSJaccard(valid_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-        self.oracle = Oracle_LSTM()
+    def init_metrics(self, mode):
+        pass
+
+    def get_initial_scores_during_training(self):
+        pass
+
+    def get_during_training_scores(self, model: BaseModel):
+        pass
+
+    def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
+        pass
+
+    def generate_samples(self, model_names, restore_types):
+        if restore_types is None:
+            restore_types = self.test_restore_types
+        if model_names is None:
+            model_names = all_models
+
+        for restore_type in restore_types:
+            print(restore_type)
+            for model_name in model_names:
+                print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
+
+                tracker = BestModelTracker(model_name, self)
+                dumper = tracker.dumper
+                model = tracker.model
+                dumper.restore_model(restore_type)
+
+                sample_codes = model.generate_samples(self.test_n_sampling)
+                additional_fields = self.get_sample_additional_fields(model, sample_codes,
+                                                                      self.test_data, restore_type)
+
+                sample_lines = self.parser.id_format2line(sample_codes)
+
+                key = list(additional_fields['gen'].keys())[0]
+                min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
+                sample_lines = sample_lines[:min_len]
+                for key in additional_fields['gen']:
+                    additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
+
+                key = list(additional_fields['test'].keys())[0]
+                min_len = min(len(self.test_data), len(additional_fields['test'][key]))
+                test_lines = self.parser.id_format2line(self.test_data[:min_len])
+                for key in additional_fields['test']:
+                    additional_fields['test'][key] = additional_fields['test'][key][:min_len]
+
+                dumper.dump_samples_with_additional_fields(sample_lines,
+                                                           additional_fields['gen'],
+                                                           restore_type, 'gen')
+                dumper.dump_samples_with_additional_fields(test_lines,
+                                                           additional_fields['test'],
+                                                           restore_type, 'test')
+                model.delete()
+
+    def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
+        pass
+
+    def final_evaluate(self, model_names, restore_types):
+        if restore_types is None:
+            restore_types = self.test_restore_types
+        if model_names is None:
+            model_names = all_models
+
+        self.eval_pre_check(model_names, restore_types)
+        for restore_type in restore_types:
+            print(restore_type)
+            for model_name in model_names:
+                print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
+                m = create_model(model_name, None)
+                dumper = Dumper(m, self.k, self.dm_name)
+                refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'test')
+                samples_with_additional_fields = \
+                    dumper.load_samples_with_additional_fields(restore_type, 'gen')
+
+                scores_persample, scores = self.get_test_scores(refs_with_additional_fields,
+                                                                samples_with_additional_fields)
+                dumper.dump_final_results(scores, restore_type)
+                dumper.dump_final_results_details(scores_persample, restore_type)
+
+    def eval_pre_check(self, model_names, restore_types):
+        if restore_types is None:
+            restore_types = self.test_restore_types
+        if model_names is None:
+            model_names = all_models
+        print('ref/test pre checking!')
+        for restore_type in restore_types:
+            print(restore_type)
+            for model_name in model_names:
+                print(model_name)
+                assert self.test_samples_equals_references(Dumper(create_model(model_name, None), self.k, self.dm_name).
+                                                           load_samples_with_additional_fields(restore_type, 'test'))
+        print('ref/test pre checking passed!')
+
+    def test_samples_equals_references(self, refs_with_additional_fields):
+        print('checking test/ref equivalence!')
+        refs = [r['text'] for r in refs_with_additional_fields]
+        return set(refs) == set(self.test_data)
 
 
-class ModelDumper:
-    def __init__(self, model: BaseModel, evaluator: Evaluator, k=0, name='', is_dummy=False):
-        self.k = k
-        self.model = model
-        self.evaluator = evaluator
-        self.name = name
-        self.is_dummy = is_dummy
-        self.best_history = {
-            # 'bleu3': [{"value": 0.0, "epoch": -1}],
+class RealWorldEvaluator(Evaluator):
+    test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
+
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
+        super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
+        self.selfbleu_n_sampling = 5000
+
+    def init_metrics(self, mode):
+        if mode == 'train':
+            valid_tokens = word_base_tokenize(self.parser.id_format2line(self.valid_data))
+            # self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
+            # self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
+            self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3.)
+        elif mode == 'eval':
+            test_tokens = word_base_tokenize(self.test_data)
+            self.bleu5 = Bleu(test_tokens, weights=np.ones(5) / 5.)
+            self.bleu4 = Bleu(test_tokens, weights=np.ones(4) / 4., other_instance=self.bleu5)
+            self.bleu3 = Bleu(test_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
+            self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
+            self.jaccard5 = MSJaccard(test_tokens, 5)
+            self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
+            self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
+            self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
+            self.fbd = FBD(self.test_data, 64, ROOT_PATH + "../data/bert_models/uncased_L-12_H-768_A-12/")
+        elif mode == 'gen':
+            pass
+        elif mode == 'eval_precheck':
+            pass
+        else:
+            raise BaseException('invalid evaluator mode!')
+
+    def get_initial_scores_during_training(self):
+        return {
+            'bleu3': [{"value": 0.0, "epoch": -1}],
             # 'bleu4': [{"value": 0.0, "epoch": -1}],
             # 'bleu5': [{"value": 0.0, "epoch": -1}],
+            '-nll': [{"value": -np.inf, "epoch": -1}]
+        }
+
+    def get_during_training_scores(self, model: BaseModel):
+        samples = model.generate_samples(self.during_training_n_sampling)
+        samples = self.parser.id_format2line(samples, merge=False)
+        new_scores = {
+            'bleu3': np.mean(self.bleu3.get_score(samples)),
+            # 'bleu4': np.mean(self.bleu4.get_score(new_samples)),
+            # 'bleu5': np.mean(self.bleu5.get_score(new_samples)),
+            '-nll': -model.get_nll()
+        }
+        return new_scores
+
+    def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
+        lnqfromp = model.get_persample_ll(test_codes)
+        lnqfromq = model.get_persample_ll(sample_codes)
+        return {'gen': {'lnq': lnqfromq}, 'test': {'lnq': lnqfromp}}
+
+    def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
+        sample_lines = [r['text'] for r in samples_with_additional_fields]
+        sample_tokens = word_base_tokenize(sample_lines)
+
+        if self.selfbleu_n_sampling == -1:
+            subsampled_tokens = sample_tokens
+        else:
+            subsamples_mask = np.random.choice(range(len(sample_tokens)), self.selfbleu_n_sampling, replace=False)
+            subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
+
+        self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
+        jaccard5_score, jaccard_cache = self.jaccard5.get_score(sample_tokens, return_cache=True)
+        scores_persample = {
+            'bleu2': self.bleu2.get_score(sample_tokens),
+            'bleu3': self.bleu3.get_score(sample_tokens),
+            'bleu4': self.bleu4.get_score(sample_tokens),
+            'bleu5': self.bleu5.get_score(sample_tokens),
+            'self_bleu5': self_bleu5.get_score(),
+            'self_bleu4': SelfBleu(subsampled_tokens, weights=np.ones(4) / 4., other_instance=self_bleu5).get_score(),
+            'self_bleu3': SelfBleu(subsampled_tokens, weights=np.ones(3) / 3., other_instance=self_bleu5).get_score(),
+            'self_bleu2': SelfBleu(subsampled_tokens, weights=np.ones(2) / 2., other_instance=self_bleu5).get_score(),
+            '-nll': [r['lnq'] for r in refs_with_additional_fields]
+        }
+        scores_mean = {
+            'jaccard5': jaccard5_score,
+            'jaccard4': self.jaccard4.get_score(sample_tokens, cache=jaccard_cache),
+            'jaccard3': self.jaccard3.get_score(sample_tokens, cache=jaccard_cache),
+            'jaccard2': self.jaccard2.get_score(sample_tokens, cache=jaccard_cache),
+            'fbd': self.fbd.get_score(sample_lines)
+        }
+        for key in scores_persample:
+            scores_mean[key] = np.mean(scores_persample[key])
+        return scores_persample, scores_mean
+
+
+class OracleEvaluator(Evaluator):
+    test_restore_types = ['-nll_oracle', 'last_iter']
+
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
+        super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
+
+    def init_metrics(self, mode):
+        if mode == 'train':
+            self.oracle = Oracle_LSTM()
+        elif mode == 'test':
+            self.oracle = Oracle_LSTM()
+        elif mode == 'gen':
+            pass
+        elif mode == 'eval_precheck':
+            pass
+        else:
+            raise BaseException('invalid evaluator mode!')
+
+    def get_initial_scores_during_training(self):
+        return {
             '-nll_oracle': [{"value": -np.inf, "epoch": -1}],
             '-nll': [{"value": -np.inf, "epoch": -1}]
         }
-        self.n_sampling = 5000
+
+    def get_during_training_scores(self, model: BaseModel):
+        new_samples = model.generate_samples(self.during_training_n_sampling)
+        new_scores = {
+            '-nll_oracle': np.mean(self.oracle.log_probability(new_samples)),
+            '-nll': -model.get_nll()
+        }
+        return new_scores
+
+    def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
+        test_lines = self.parser.id_format2line(test_codes)
+        sample_lines = self.parser.id_format2line(sample_codes)
+        lnqfromp = model.get_persample_ll(test_codes)
+        lnqfromq = model.get_persample_ll(sample_codes)
+        lnpfromp = self.oracle.log_probability(test_lines)
+        lnpfromq = self.oracle.log_probability(sample_lines)
+        return {'gen': {'lnq': lnqfromq, 'lnp': lnpfromq},
+                'test': {'lnq': lnqfromp, 'lnp': lnpfromp}}
+
+    def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
+        from metrics.divergences import Bhattacharyya, Jeffreys
+
+        lnqfromp = [r['lnq'] for r in refs_with_additional_fields]
+        lnqfromq = [r['lnq'] for r in samples_with_additional_fields]
+        lnpfromp = [r['lnp'] for r in refs_with_additional_fields]
+        lnpfromq = [r['lnp'] for r in samples_with_additional_fields]
+
+        scores_persample = {
+            'lnqfromp': lnqfromp,
+            'lnqfromq': lnqfromq,
+            'lnpfromp': lnpfromp,
+            'lnpfromq': lnpfromq
+        }
+        scores_mean = {
+            'bhattacharyya': Bhattacharyya(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
+            'jeffreys': Jeffreys(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
+        }
+        for key in scores_persample:
+            scores_mean[key] = np.mean(scores_persample[key])
+        return scores_persample, scores_mean
+
+
+class Dumper:
+    def __init__(self, model: BaseModel, k=0, dm_name=''):
+        self.k = k
+        self.dm_name = dm_name
+        self.model = model
 
         self.init_paths()
-        if not self.is_dummy:
-            self.model.set_dumper(self)
-            self.model.delete_saved_model()
-            self.model.set_train_val_loc(self.evaluator.train_loc, self.evaluator.valid_loc)
 
     def init_paths(self):
-        self.saving_path = MODEL_PATH + self.name + '/' + self.model.get_name() + ('_k%d/' % self.k)
+        self.saving_path = MODEL_PATH + self.dm_name + '/' + self.model.get_name() + ('_k%d/' % self.k)
         create_folder_if_not_exists(self.saving_path)
+        self.final_result_parent_path = os.path.join(EXPORT_PATH, 'evaluations_{}k-fold_k{}_{}/' \
+                                                     .format(k_fold, self.k, self.dm_name))
+        create_folder_if_not_exists(self.final_result_parent_path)
+        self.final_result_file_name = self.model.get_name()
 
     def store_better_model(self, key):
         zip_folder(self.model.get_saving_path(), key, self.saving_path)
@@ -79,31 +308,7 @@ class ModelDumper:
         print('K%d - "%s" based "%s" saved model restored' % (self.k, key, self.model.get_name()))
         self.model.load()
 
-    def update_scores(self, epoch=0, last_iter=False):
-        if last_iter:
-            self.store_better_model('last_iter')
-            print('K%d - model "%s", epoch -, last iter model saved!' % (self.k, self.model.get_name()))
-            return
-        new_samples = tokenize(self.model.generate_samples(self.n_sampling))
-        new_scores = {
-            # 'bleu3': self.evaluator.bleu3.get_score(new_samples),
-            # 'bleu4': self.evaluator.bleu4.get_score(new_samples),
-            # 'bleu5': self.evaluator.bleu5.get_score(new_samples),
-            '-nll_oracle': np.mean(self.evaluator.oracle.log_probability(new_samples)),
-            '-nll': -float(self.model.get_nll())
-        }
-        print(new_scores)
-        print(new_samples[0])
-
-        for key, new_v in new_scores.items():
-            if self.best_history[key][-1]['value'] < new_v:
-                print('K%d - model "%s", epoch %d, found better score for "%s": %.4f' %
-                      (self.k, self.model.get_name(), epoch, key, new_v))
-                self.store_better_model(key)
-                self.best_history[key].append({"value": new_v, "epoch": epoch})
-                dump_json(self.best_history, 'best_history', self.saving_path)
-
-    def store_generated_samples(self, samples, load_key):
+    def dump_generated_samples(self, samples, load_key):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
         write_text(samples, os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
@@ -114,377 +319,64 @@ class ModelDumper:
     def get_generated_samples_path(self, load_key):
         return os.path.join(self.saving_path, load_key + '_based_samples.txt')
 
+    def dump_best_history(self, best_history):
+        dump_json(best_history, 'best_history', self.saving_path)
 
-def final_evaluate(ds_name, dm_name, k=0, n_sampling=5000):
-    file_name = 'evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
-    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
-    if os.path.exists(t_path):
-        all_scores = load_json(file_name, EXPORT_PATH)
-        print('saved score {} found!'.format(file_name))
-        all_scores[k] = all_scores[str(k)]
-        del all_scores[str(k)]
-    else:
-        all_scores = {k: {}}
-        print('saved score not found!')
+    def dump_samples_with_additional_fields(self, samples, additional_fields: dict, load_key, sample_label):
+        dump_json([
+            {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
+            for i in range(len(samples))],
+            sample_label + '_' + load_key + '_based_samples', self.saving_path)
 
-    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-    ev = Evaluator(dm, k, dm_name)
+    def load_samples_with_additional_fields(self, load_key, sample_label):
+        result = load_json(sample_label + '_' + load_key + '_based_samples', self.saving_path)
+        return result
 
-    for restore_type in ['bleu3', 'bleu4', 'bleu5', 'last_iter']:
-        restore_type_key = restore_type + ' restore type'
-        print(restore_type_key)
-        if restore_type_key not in all_scores[k]:
-            all_scores[k][restore_type + ' restore type'] = {}
-        for model_name in ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']:
-            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
-            if model_name in all_scores[k][restore_type_key]:
-                print("{} model already evaluated!".format(model_name))
-                continue
-            if model_name == 'leakgan':
-                m = LeakGan(dm.get_parser())
-            elif model_name == 'textgan':
-                m = TextGan(dm.get_parser())
-            else:
-                m = TexyGen(model_name, dm.get_parser())
-            dumper = ModelDumper(m, ev, k, dm_name, is_dummy=True)
+    def dump_final_results(self, results, restore_type):
+        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore', self.final_result_parent_path)
 
-            samples = tokenize(dumper.load_generated_samples(restore_type))
-            subsamples_mask = np.random.choice(range(len(samples)), 5000, replace=False)
-            subsamples = np.array(samples)[subsamples_mask].tolist()
-            # samples = subsamples
-            print('subsampled to 5000!')
+    def load_final_results(self, restore_type):
+        return load_json(self.final_result_file_name + '_' + restore_type + 'restore', self.final_result_parent_path)
 
-            # nll = float(m.get_nll())
-            nll = -np.inf
-            # m.delete()
-            del m
+    def dump_final_results_details(self, results, restore_type):
+        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore_details',
+                  self.final_result_parent_path)
 
-            self_bleu5 = SelfBleu(subsamples, weights=np.ones(5) / 5.)
-            jaccard5_score, jaccard_cache = ev.jaccard5.get_score(samples, return_cache=True)
-            scores = {
-                'bleu2': ev.bleu2.get_score(samples),
-                'bleu3': ev.bleu3.get_score(samples),
-                'bleu4': ev.bleu4.get_score(samples),
-                'bleu5': ev.bleu5.get_score(samples),
-                'jaccard5': jaccard5_score,
-                'jaccard4': ev.jaccard4.get_score(samples, cache=jaccard_cache),
-                'jaccard3': ev.jaccard3.get_score(samples, cache=jaccard_cache),
-                'jaccard2': ev.jaccard2.get_score(samples, cache=jaccard_cache),
-                'self_bleu5': self_bleu5.get_score(),
-                'self_bleu4': SelfBleu(subsamples, weights=np.ones(4) / 4.,
-                                       cached_fields=self_bleu5.get_cached_fields()).get_score(),
-                'self_bleu3': SelfBleu(subsamples, weights=np.ones(3) / 3.,
-                                       cached_fields=self_bleu5.get_cached_fields()).get_score(),
-                'self_bleu2': SelfBleu(subsamples, weights=np.ones(2) / 2.,
-                                       cached_fields=self_bleu5.get_cached_fields()).get_score(),
-                '-nll': -nll
-            }
-            print(scores)
-            all_scores[k][restore_type + ' restore type'][model_name] = scores
-            dump_json(all_scores, file_name, EXPORT_PATH)
+    def load_final_results_details(self, restore_type):
+        return load_json(self.final_result_file_name + '_' + restore_type + 'restore_details',
+                         self.final_result_parent_path)
 
 
-def final_nll_evaluate(ds_name, dm_name, k=0, n_sampling=5000):
-    file_name = 'evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
-    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
-    assert os.path.exists(t_path), 'other scores must be calculated first'
-    all_scores = load_json(file_name, EXPORT_PATH)
-    print('saved score {} found!'.format(file_name))
-    all_scores[k] = all_scores[str(k)]
-    del all_scores[str(k)]
-    print('evaluating nlls!!!!!!')
+class BestModelTracker:
+    def __init__(self, model_name, evaluator: Evaluator):
+        self.k = evaluator.k
+        self.model = create_model(model_name, evaluator.parser)
+        self.dumper = Dumper(self.model, self.k, evaluator.dm_name)
+        self.evaluator = evaluator
+        self.best_history = self.evaluator.get_initial_scores_during_training()
+        self.model.set_tracker(self)
+        self.model.delete_saved_model()
+        self.model.create_model()
 
-    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-    ev = Evaluator(dm, k, dm_name)
+    def update_scores(self, epoch=0, last_iter=False):
+        if last_iter:
+            self.dumper.store_better_model('last_iter')
+            print('K%d - model "%s", epoch -, last iter model saved!' % (self.k, self.model.get_name()))
+            return
+        new_scores = self.evaluator.get_during_training_scores(self.model)
+        print(new_scores)
 
-    for restore_type in ['bleu3', 'bleu4', 'bleu5', 'last_iter']:
-        restore_type_key = restore_type + ' restore type'
-        print(restore_type_key)
-        assert restore_type_key in all_scores[k], 'all restore type scores must be calculated first'
-        for model_name in ['leakgan', 'seqgan', 'rankgan', 'maligan', 'mle']:
-            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
-            assert model_name in all_scores[k][restore_type_key], 'all model scores must be calculated first'
-            if model_name == 'leakgan':
-                m = LeakGan(dm.get_parser())
-            elif model_name == 'textgan':
-                m = TextGan(dm.get_parser())
-            else:
-                m = TexyGen(model_name, dm.get_parser())
-            dumper = ModelDumper(m, ev, k, dm_name)
-            dumper.restore_model(restore_type)
+        for key, new_v in new_scores.items():
+            if self.best_history[key][-1]['value'] < new_v:
+                print('K%d - model "%s", epoch %d, found better score for "%s": %.4f' %
+                      (self.k, self.model.get_name(), epoch, key, new_v))
+                self.dumper.store_better_model(key)
+                self.best_history[key].append({"value": new_v, "epoch": epoch})
+                self.dumper.dump_best_history(self.best_history)
 
-            ll = float(-m.get_nll())
-            m.delete()
-            del m
-
-            scores = {
-                'bleu2': None,
-                'bleu3': None,
-                'bleu4': None,
-                'bleu5': None,
-                'jaccard5': None,
-                'jaccard4': None,
-                'jaccard3': None,
-                'jaccard2': None,
-                'self_bleu5': None,
-                'self_bleu4': None,
-                'self_bleu3': None,
-                'self_bleu2': None,
-                '-nll': ll
-            }
-            print(scores)
-            for key in scores:
-                assert key in all_scores[k][restore_type + ' restore type'][model_name], \
-                    'all metric scores must be calculated first'
-            if all_scores[k][restore_type + ' restore type'][model_name]['-nll'] != float('inf') and \
-                    all_scores[k][restore_type + ' restore type'][model_name]['-nll'] != float('-inf'):
-                # assert all_scores[k][restore_type + ' restore type'][model_name]['-nll'] == ll, \
-                print('previous nll found!!!!!!!!!!!!!!!!!!!!!!!')
-                print(
-                    'read nll doesn\'t match %.8f new, %.8f old' % \
-                    (ll, all_scores[k][restore_type + ' restore type'][model_name]['-nll']))
-            else:
-                print('previous nll not found!!!!!!!!!!!!!!!!!!!!!!!')
-            all_scores[k][restore_type + ' restore type'][model_name]['-nll'] = ll
-            dump_json(all_scores, file_name, EXPORT_PATH)
+    def start(self):
+        self.model.set_train_val_data(self.evaluator.train_data, self.evaluator.valid_data)
+        self.model.train()
 
 
-def final_sampling(ds_name, dm_name, k=0, n_sampling=5000):
-    file_name = 'evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
-    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
-    if os.path.exists(t_path):
-        all_scores = load_json(file_name, EXPORT_PATH)
-        print('saved score {} found!'.format(file_name))
-        all_scores[k] = all_scores[str(k)]
-        del all_scores[str(k)]
-    else:
-        all_scores = {k: {}}
-        print('saved score not found!')
-
-    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-    ev = Evaluator(dm, k, dm_name, init_data=False)
-
-    for restore_type in ['bleu3', 'bleu4', 'bleu5', 'last_iter']:
-        restore_type_key = restore_type + ' restore type'
-        print(restore_type_key)
-        if restore_type_key not in all_scores[k]:
-            all_scores[k][restore_type + ' restore type'] = {}
-        for model_name in ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']:
-            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
-            if model_name in all_scores[k][restore_type_key]:
-                print("{} model already sampled!".format(model_name))
-                continue
-            if model_name == 'leakgan':
-                m = LeakGan(dm.get_parser())
-            elif model_name == 'textgan2':
-                m = TextGan(dm.get_parser())
-            else:
-                m = TexyGen(model_name, dm.get_parser())
-            dumper = ModelDumper(m, ev, k, dm_name)
-            dumper.restore_model(restore_type)
-
-            samples = m.generate_samples(n_sampling)
-            dumper.store_generated_samples(samples, restore_type)
-            m.delete()
-            del m
-
-
-def start_train(ds_name, dm_name, k=0):
-    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-
-    ev = Evaluator(dm, k, dm_name)
-
-    if m_name == 'leakgan':
-        m = LeakGan(dm.get_parser())
-    elif m_name == 'textgan2':
-        m = TextGan(dm.get_parser())
-    else:
-        m = TexyGen(m_name, dm.get_parser())
-    ModelDumper(m, ev, k, dm_name)
-    m.train()
-
-
-def final_oracle_evaluate(ds_name, dm_name, k=0, n_sampling=12500):
-    file_name = 'oracle_evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
-    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
-    if os.path.exists(t_path):
-        all_scores = load_json(file_name, EXPORT_PATH)
-        print('saved score {} found!'.format(file_name))
-        all_scores[k] = all_scores[str(k)]
-        del all_scores[str(k)]
-    else:
-        all_scores = {k: {}}
-        print('saved score not found!')
-
-    dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-    print(dm.get_parser().vocab.shape)
-    ev = Evaluator(dm, k, dm_name)
-
-    for restore_type in ['-nll_oracle', 'last_iter']:
-        restore_type_key = restore_type + ' restore type'
-        print(restore_type_key)
-        if restore_type_key not in all_scores[k]:
-            all_scores[k][restore_type + ' restore type'] = {}
-        for model_name in ['leakgan', 'seqgan', 'rankgan', 'maligan', 'mle']:
-            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
-            if model_name in all_scores[k][restore_type_key]:
-                print("{} model already evaluated!".format(model_name))
-                continue
-            if model_name == 'leakgan':
-                m = LeakGan(dm.get_parser())
-            elif model_name == 'textgan':
-                m = TextGan(dm.get_parser())
-            else:
-                m = TexyGen(model_name, dm.get_parser())
-            dumper = ModelDumper(m, ev, k, dm_name)
-            dumper.restore_model(restore_type)
-
-            valid_loc = ev.valid_loc
-            samples_loc = dumper.get_generated_samples_path(restore_type)
-            sample_lines = dumper.load_generated_samples(restore_type)
-            id_format_lines = np.array(dm.get_parser().line2id_format(sample_lines)[0])
-            print(id_format_lines.shape)
-            id_format_sample_loc = dm.dump_unpacked_data_on_file((None, id_format_lines, None),
-                                                                 dm_name +
-                                                                 '-temp_{}-{}-k'.format(model_name, restore_type) + str(
-                                                                     k), parse=False)
-
-            sample_tokens = tokenize(sample_lines)
-            sample_tokens = [[int(vv) for vv in v] for v in sample_tokens]
-            valid_tokens = tokenize(dm.get_parsed_unpacked_data(dm.get_validation_data(k=k, unpack=True)))
-            valid_tokens = [[int(vv) for vv in v] for v in valid_tokens][:len(sample_tokens)]
-
-            oracle_sample_prob = np.array(ev.oracle.log_probability(sample_tokens))
-            oracle_valid_prob = np.array(ev.oracle.log_probability(valid_tokens))
-            model_valid_prob = np.array(m.get_persample_ll(valid_loc))
-            model_sample_prob = np.array(m.get_persample_ll(id_format_sample_loc))
-
-            print('******shapes******')
-            print(oracle_sample_prob.shape)
-            print(oracle_valid_prob.shape)
-            print(model_valid_prob.shape)
-            print(model_sample_prob.shape)
-
-            from metrics.divergences import Bhattacharyya, Jeffreys
-            bhattacharyya = Bhattacharyya(oracle_valid_prob, model_valid_prob, oracle_sample_prob, model_sample_prob)
-            jeffreys = Jeffreys(oracle_valid_prob, model_valid_prob, oracle_sample_prob, model_sample_prob)
-
-            m.delete()
-            del m
-
-            scores = {
-                'lnp_fromp': float(np.mean(oracle_valid_prob)),
-                'lnp_fromq': float(np.mean(oracle_sample_prob)),
-                'lnq_fromp': float(np.mean(model_valid_prob)),
-                'lnq_fromq': float(np.mean(model_sample_prob)),
-                'bhattacharyya': float(bhattacharyya),
-                'jeffreys': float(jeffreys)
-            }
-            print(scores)
-            all_scores[k][restore_type + ' restore type'][model_name] = scores
-            dump_json(all_scores, file_name, EXPORT_PATH)
-
-
-def final_oracle_sampling(ds_name, dm_name, k=0, n_sampling=12500):
-    file_name = 'oracle_evaluations_{}k-fold_k{}_{}_nsamp{}'.format(k_fold, k, ds_name, n_sampling)
-    t_path = os.path.join(EXPORT_PATH, file_name + '.json')
-    if os.path.exists(t_path):
-        all_scores = load_json(file_name, EXPORT_PATH)
-        print('saved score {} found!'.format(file_name))
-        all_scores[k] = all_scores[str(k)]
-        del all_scores[str(k)]
-    else:
-        all_scores = {k: {}}
-        print('saved score not found!')
-
-    dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-    ev = Evaluator(dm, k, dm_name, init_data=False)
-
-    for restore_type in ['-nll_oracle', 'last_iter']:
-        restore_type_key = restore_type + ' restore type'
-        print(restore_type_key)
-        if restore_type_key not in all_scores[k]:
-            all_scores[k][restore_type + ' restore type'] = {}
-        for model_name in ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan']:
-            print('k: {}, restore_type: {}, model_name: {}'.format(k, restore_type, model_name))
-            if model_name in all_scores[k][restore_type_key]:
-                print("{} model already sampled!".format(model_name))
-                continue
-            if model_name == 'leakgan':
-                m = LeakGan(dm.get_parser())
-            elif model_name == 'textgan2':
-                m = TextGan(dm.get_parser())
-            else:
-                m = TexyGen(model_name, dm.get_parser())
-            dumper = ModelDumper(m, ev, k, dm_name)
-            dumper.restore_model(restore_type)
-
-            samples = m.generate_samples(n_sampling)
-            dumper.store_generated_samples(samples, restore_type)
-            m.delete()
-            del m
-
-
-def oracle_train(ds_name, dm_name, k=0):
-    dm = OracleDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-
-    ev = Evaluator(dm, k, dm_name)
-
-    if m_name == 'leakgan':
-        m = LeakGan(dm.get_parser())
-    elif m_name == 'textgan2':
-        m = TextGan(dm.get_parser())
-    else:
-        m = TexyGen(m_name, dm.get_parser())
-    ModelDumper(m, ev, k, dm_name)
-    m.train()
-
-
-def store_parsed_validations(ds_name, dm_name):
-    dm = SentenceDataManager([SentenceDataloader(ds_name)], dm_name + '-words', k_fold=k_fold)
-    for k in range(k_fold):
-        train_data = dm.get_training_data(k, unpack=True)
-        valid_data = dm.get_validation_data(k, unpack=True)
-        train_loc = dm.dump_unpacked_data_on_file(train_data, dm_name + '-train-k' + str(k), parse=True)
-        valid_loc = dm.dump_unpacked_data_on_file(valid_data, dm_name + '-valid-k' + str(k), parse=True)
-
-
-if __name__ == '__main__':
-    import sys
-
-    k_fold = 3
-
-    m_name = sys.argv[1]
-    dataset_name = sys.argv[2]
-    input_k = int(sys.argv[3])
-
-    train = sys.argv[4] == 'train'
-    sample = sys.argv[4] == 'sample'
-    eval = sys.argv[4] == 'eval'
-    eval_nll = sys.argv[4] == 'eval_nll'
-
-    oracle = sys.argv[4] == 'oracle'
-    sample_oracle = sys.argv[4] == 'sample_oracle'
-    eval_oracle = sys.argv[4] == 'eval_oracle'
-
-    store_valid = sys.argv[4] == 'store_valid'
-
-    dataset_prefix_name = dataset_name.split('-')[0]
-    if train:
-        start_train(dataset_name, dataset_prefix_name, input_k)
-    elif oracle:
-        oracle_train(dataset_name, dataset_prefix_name, input_k)
-    elif sample_oracle:
-        final_oracle_sampling(dataset_name, dataset_prefix_name, input_k)
-    elif eval_oracle:
-        final_oracle_evaluate(dataset_name, dataset_prefix_name, input_k)
-    elif sample:
-        final_sampling(dataset_name, dataset_prefix_name, input_k, 20000)
-    elif store_valid:
-        store_parsed_validations(dataset_name, dataset_prefix_name)
-    elif eval_nll:
-        final_nll_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)
-    elif eval:
-        final_evaluate(dataset_name, dataset_prefix_name, input_k, 20000)
-    else:
-        print('invalid input!!!')
+k_fold = 3

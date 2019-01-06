@@ -3,12 +3,11 @@ import argparse
 from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import OracleDataManager, SentenceDataManager
 from data_management.parsers import WordBasedParser, OracleBasedParser
+from evaluator import RealWorldEvaluator, OracleEvaluator, BestModelTracker, Dumper
 from export_utils.evaluation_exporter import export
-from the_new_evaluator import RealWorldEvaluator, OracleEvaluator, BestModelTracker, create_model, Dumper
+from models import all_models, create_model
 
 parser = argparse.ArgumentParser()
-
-all_models = ['seqgan', 'rankgan', 'maligan', 'mle', 'leakgan', 'dgsan']
 
 
 def convert_legacies():
@@ -35,7 +34,8 @@ def convert_legacies():
 parser.add_argument('mode', type=str, help='real(world)/oracle mode', choices=['real', 'oracle'])
 parser.add_argument('-d', '--data', type=str, help='dataset name', required=True)
 parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate)', choices=['train', 'gen', 'eval',
-                                                                                             'legacy', 'export'],
+                                                                                             'eval_precheck', 'legacy',
+                                                                                             'export'],
                     required=True)
 parser.add_argument('-k', type=int, help='which fold to action be done')
 parser.add_argument('-m', '--models', type=str, help='model names', nargs='+', choices=all_models)
@@ -75,7 +75,7 @@ elif args.action == 'gen':
     ev = EvaluatorClass(None, None, ts, parser, args.action, args.k, dataset_prefix_name)
 
     ev.generate_samples(args.models, args.restore)
-elif args.action == 'eval':
+elif args.action.startswith('eval'):
     assert args.k is not None
     m_name = args.models[0] if args.models is not None else all_models[0]
     restore_type = args.restore[0] if args.restore is not None else \
@@ -92,7 +92,10 @@ elif args.action == 'eval':
     # from utils.file_handler import read_text
     # ts = read_text('{}-valid-k{}_parsed'.format(dataset_prefix_name, args.k), False)
     ev = EvaluatorClass(None, None, ts, None, args.action, args.k, dataset_prefix_name)
-    ev.final_evaluate(args.models, args.restore)
+    if args.action == 'eval':
+        ev.final_evaluate(args.models, args.restore)
+    elif args.action == 'eval_precheck':
+        ev.eval_pre_check(args.models, args.restore)
 elif args.action == 'legacy':
     assert args.k is not None
     convert_legacies()

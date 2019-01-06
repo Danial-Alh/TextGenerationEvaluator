@@ -1,9 +1,9 @@
 import numpy as np
 
 from export_utils.evaluation_utils import TblGenerator, change_model_name, change_metric_name
-from the_new_evaluator import Dumper, create_model
+from evaluator import Dumper
+from models import all_models, create_model, out_side_trained_models
 
-models_list = ["MLE", "SeqGAN", "RankGAN", "MaliGAN", "LeakGAN", "DGSAN"]
 dataset_name_dict = {"coco60": "COCO Captions", "emnlp60": "EMNLP2017 WMT News"}
 
 
@@ -31,12 +31,13 @@ class RealExporter:
             res[dataset_name][k] = {}
             for base_type in inp_possible_base_list:
                 res[dataset_name][k][base_type] = {}
-                for model_name in models_list:
+                for model_name in all_models:
                     good_model_name = change_model_name(model_name)
                     res[dataset_name][k][base_type][good_model_name] = {}
                     dumper = Dumper(create_model(model_name, None), k, dataset_name)
                     for metric_name, elem in \
-                            dumper.load_final_results(base_type if model_name != 'DGSAN' else 'bleu3').items():
+                            dumper.load_final_results(base_type if model_name not in out_side_trained_models else
+                                                      'last_iter').items():
                         good_metric_name = change_metric_name(metric_name)
                         # elem = data[base_type + " restore type"][model_name][metric_name]
                         res[dataset_name][k][base_type][good_model_name][good_metric_name] = elem
@@ -49,7 +50,7 @@ class RealExporter:
             best_mask = {x: None for x in self.metric_names}
             best_value = {x: None for x in self.metric_names}
 
-            for model_name in models_list:
+            for model_name in all_models:
                 for metric_name in self.metric_names:
                     tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
                     mu, sigma = np.mean(tmp), np.std(tmp)
@@ -65,7 +66,7 @@ class RealExporter:
             caption = self.make_caption(dataset_name, base_type)
             tbl = TblGenerator(["Model"] + self.metric_names, caption, "scriptsize",
                                "table:%s:%s" % (dataset_name, "last" if base_type == "last_iter" else base_type))
-            for model_name in models_list:
+            for model_name in all_models:
                 metric_results = []
                 for metric_name in self.metric_names:
                     tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
@@ -109,7 +110,7 @@ class OracleExporter:
             res[k] = {}
             for base_type in inp_possible_base_list:
                 res[k][base_type] = {}
-                for model_name in models_list:
+                for model_name in all_models:
                     good_model_name = change_model_name(model_name)
                     res[k][base_type][good_model_name] = {}
                     dumper = Dumper(create_model(model_name, None), k, dataset_name)
@@ -121,7 +122,7 @@ class OracleExporter:
             best_mask = {x: None for x in self.metric_names}
             best_value = {x: None for x in self.metric_names}
 
-            for model_name in models_list:
+            for model_name in all_models:
                 for metric_name in self.metric_names:
                     tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
                     mu, sigma = np.mean(tmp), np.std(tmp)
@@ -137,7 +138,7 @@ class OracleExporter:
             caption = self.make_caption(base_type)
             tbl_label_suffix = "last" if base_type == "last_iter" else "nlloracle"
             tbl = TblGenerator(["Model"] + self.metric_names, caption, "small", "table:synthetic:%s" % tbl_label_suffix)
-            for model_name in models_list:
+            for model_name in all_models:
                 metric_results = []
                 for metric_name in self.metric_names:
                     tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
