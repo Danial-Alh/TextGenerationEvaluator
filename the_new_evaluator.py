@@ -23,6 +23,7 @@ from utils.path_configs import MODEL_PATH, EXPORT_PATH, ROOT_PATH
 
 
 def create_model(model_name, parser):
+    model_name = model_name.lower()
     if model_name == 'dgsan':
         m = DGSAN(parser)
     elif model_name == 'leakgan':

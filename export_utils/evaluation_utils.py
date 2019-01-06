@@ -31,15 +31,17 @@ def change_model_name(inp):
                         "maligan": "MaliGAN",
                         "mle": "MLE",
                         "rankgan": "RankGAN",
+                        "dgsan": "DGSAN",
                         "seqgan": "SeqGAN"}
-    if inp in model_name_dict1:
-        inp = model_name_dict1[inp]
-    return model_name_dict2[inp]
+    if inp.lower() in model_name_dict1:
+        inp = model_name_dict1[inp.lower()]
+    return model_name_dict2[inp.lower()]
 
 
 def change_metric_name(inp):
     metric_name_dict = {
         "-nll": "NLL",
+        "fbd": "FBD",
         "jaccard2": "MSJ-2",
         "jaccard3": "MSJ-3",
         "jaccard4": "MSJ-4",
