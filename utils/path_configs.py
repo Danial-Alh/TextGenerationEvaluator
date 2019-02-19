@@ -6,6 +6,8 @@ import os
 ROOT_PATH = os.path.abspath(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/../') + '/'
 
 DATA_PATH = ROOT_PATH + 'data/'
+#BERT_PATH = DATA_PATH + "bert_models/uncased_L-12_H-768_A-12/"
+BERT_PATH = DATA_PATH + "bert_models/chinese_L-12_H-768_A-12/"
 MODEL_PATH = DATA_PATH + 'temp_models/'
 EXPORT_PATH = DATA_PATH + 'exports/'
 DATASET_PATH = DATA_PATH + 'dataset/'

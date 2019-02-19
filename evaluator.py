@@ -4,6 +4,7 @@ import numpy as np
 from metrics.cythonics.lib.bleu import Bleu
 from metrics.cythonics.lib.self_bleu import SelfBleu
 
+from metrics.embd import EMBD
 from metrics.fbd import FBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
@@ -12,7 +13,7 @@ from models import all_models, create_model
 from utils.file_handler import read_text, zip_folder, create_folder_if_not_exists, unzip_file, dump_json, write_text, \
     load_json
 from utils.nltk_utils import word_base_tokenize
-from utils.path_configs import MODEL_PATH, EXPORT_PATH, ROOT_PATH
+from utils.path_configs import MODEL_PATH, EXPORT_PATH, BERT_PATH
 
 
 class Evaluator:
@@ -25,7 +26,7 @@ class Evaluator:
         self.k = k
         self.dm_name = dm_name
         self.during_training_n_sampling = 5000
-        self.test_n_sampling = 20000
+        self.test_n_sampling = test_n_s
 
         self.init_metrics(mode)
 
@@ -133,14 +134,15 @@ class RealWorldEvaluator(Evaluator):
 
     def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
-        self.selfbleu_n_sampling = 5000
+        self.selfbleu_n_sampling = selfbleu_n_s
 
     def init_metrics(self, mode):
         if mode == 'train':
+            print(len(self.train_data), len(self.valid_data))
             valid_tokens = word_base_tokenize(self.parser.id_format2line(self.valid_data))
-            # self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
-            # self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., cached_fields=self.bleu5.get_cached_fields())
-            self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3.)
+            self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
+            self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., other_instance=self.bleu5)
+            self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
         elif mode == 'eval':
             test_tokens = word_base_tokenize(self.test_data)
             self.bleu5 = Bleu(test_tokens, weights=np.ones(5) / 5.)
@@ -151,7 +153,8 @@ class RealWorldEvaluator(Evaluator):
             self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-            self.fbd = FBD(self.test_data, 64, ROOT_PATH + "../data/bert_models/uncased_L-12_H-768_A-12/")
+            self.fbd = FBD(self.test_data, 64, BERT_PATH)
+            self.embd = EMBD(self.test_data, 64, BERT_PATH)
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':
@@ -162,8 +165,8 @@ class RealWorldEvaluator(Evaluator):
     def get_initial_scores_during_training(self):
         return {
             'bleu3': [{"value": 0.0, "epoch": -1}],
-            # 'bleu4': [{"value": 0.0, "epoch": -1}],
-            # 'bleu5': [{"value": 0.0, "epoch": -1}],
+            'bleu4': [{"value": 0.0, "epoch": -1}],
+            'bleu5': [{"value": 0.0, "epoch": -1}],
             '-nll': [{"value": -np.inf, "epoch": -1}]
         }
 
@@ -172,8 +175,8 @@ class RealWorldEvaluator(Evaluator):
         samples = self.parser.id_format2line(samples, merge=False)
         new_scores = {
             'bleu3': np.mean(self.bleu3.get_score(samples)),
-            # 'bleu4': np.mean(self.bleu4.get_score(new_samples)),
-            # 'bleu5': np.mean(self.bleu5.get_score(new_samples)),
+            'bleu4': np.mean(self.bleu4.get_score(samples)),
+            'bleu5': np.mean(self.bleu5.get_score(samples)),
             '-nll': -model.get_nll()
         }
         return new_scores
@@ -211,7 +214,8 @@ class RealWorldEvaluator(Evaluator):
             'jaccard4': self.jaccard4.get_score(sample_tokens, cache=jaccard_cache),
             'jaccard3': self.jaccard3.get_score(sample_tokens, cache=jaccard_cache),
             'jaccard2': self.jaccard2.get_score(sample_tokens, cache=jaccard_cache),
-            'fbd': self.fbd.get_score(sample_lines)
+            'fbd': self.fbd.get_score(sample_lines),
+            'embd': self.embd.get_score(sample_lines)
         }
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
@@ -379,4 +383,23 @@ class BestModelTracker:
         self.model.train()
 
 
+# ######## COCO
+# k_fold = 3
+# selfbleu_n_s = 5000
+# test_n_s = 20000
+
+######## IMDB
 k_fold = 3
+selfbleu_n_s = 5000
+test_n_s = 10000
+
+######## WIKI
+# k_fold = 3
+# selfbleu_n_s = 5000
+# test_n_s = 24000
+
+
+# ######## CHINESE
+# k_fold = 14
+# selfbleu_n_s = -1
+# test_n_s = 2000

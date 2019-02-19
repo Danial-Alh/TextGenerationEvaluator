@@ -17,7 +17,7 @@ def empty_sentence_remover_decorator(func):
 
 
 def data2tempfile_decorator(func):
-    def wrapper(self, samples, samples_loc=None):
+    def wrapper(self, samples=None, samples_loc=None):
         assert not (samples is None and samples_loc is not None)
         file_to_be_deleted = None
         if samples is None:
@@ -101,11 +101,11 @@ class BaseModel:
     def get_saving_path(self):
         pass
 
-    def get_name(self):
-        pass
-
     def load(self):
         pass
+
+    def get_name(self):
+        return self.__class__.__name__
 
 
 class TexyGen(BaseModel):
@@ -313,23 +313,31 @@ class TextGan(BaseModel):
 
 
 class DGSAN(BaseModel):
-    def get_name(self):
-        return __class__.__name__
+    pass
+
+
+class DGSAN1(BaseModel):
+    pass
+
+
+class DGSAN9(BaseModel):
+    pass
+
+
+class DGSAN18(BaseModel):
+    pass
 
 
 class CDGSAN(BaseModel):
-    def get_name(self):
-        return __class__.__name__
+    pass
 
 
 class DGAN(BaseModel):
-    def get_name(self):
-        return __class__.__name__
+    pass
 
 
 class Mle180(BaseModel):
-    def get_name(self):
-        return __class__.__name__
+    pass
 
 
 def create_model(model_name, parser):
@@ -343,12 +351,13 @@ def create_model(model_name, parser):
 
 
 model_name_class_mapping = {
-    'dgsan': DGSAN, 'dgan': DGAN, 'cdgsan': CDGSAN, 'mle180': Mle180,
+    'dgsan': DGSAN, 'dgsan1': DGSAN1, 'dgsan9': DGSAN9, 'dgsan18': DGSAN18, 'dgan': DGAN, 'cdgsan': CDGSAN,
+    'mle180': Mle180,
     'leakgan': LeakGan, 'textgan': TextGan,
     'seqgan': TexyGen, 'rankgan': TexyGen, 'maligan': TexyGen, 'mle': TexyGen
 }
 all_models = model_name_class_mapping.keys()
-out_side_trained_models = ['dgsan', 'dgan', 'cdgsan', 'mle180']
+out_side_trained_models = ['dgsan', 'dgsan1', 'dgsan9', 'dgsan18', 'dgan', 'cdgsan', 'mle180']
 
 if __name__ == '__main__':
     dm = SentenceDataManager([SentenceDataloader('coco60-train')], 'coco-words', k_fold=3)
@@ -357,7 +366,7 @@ if __name__ == '__main__':
     # tr_loc = dm.dump_unpacked_data_on_file(train_data, 'coco-train-k0')
     # valid_loc = dm.dump_unpacked_data_on_file(valid_data, 'coco-valid-k0')
     m = TexyGen('seqgan', dm.get_parser())
-    m.set_train_val_data(*dm.get_data(k=0, parse=False).values())
+    m.set_train_val_data(*dm.get_data(k=0, parse=False))
     # print(dm.get_parser().id_format2line(m.generate_samples(100)))
     # print(m.get_nll(dm.get_data(k=0)['valid']))
     # print(m.get_persample_ll(dm.get_data(k=0, subsample_size=100)['valid']))

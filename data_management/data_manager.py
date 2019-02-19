@@ -35,7 +35,6 @@ class DataManager(PersistentClass):
                                                                           ' delete datamanager obj first!'
         return result
 
-
     def _load_data(self):
         train_raw_data = self.data_loaders['train'].get_data()
         test_raw_data = self.data_loaders['test'].get_data()
@@ -67,11 +66,14 @@ class DataManager(PersistentClass):
     def get_data(self, k, subsample_size=-1, parse=False):  # k = -1 to get test data
         if k == -1:
             test_data = self.structured_data['test']
-            return {'test': self.__post_process(test_data, subsample_size, parse)}
+            return self.__post_process(test_data, subsample_size, parse)
+        if self.k_fold == 1:
+            train_data = self.__get_data_of_k(0)
+            return self.__post_process(train_data, subsample_size, parse), None
         train_data = self.__get_data_of_k([kk for kk in range(self.k_fold) if kk != k])
         valid_data = self.__get_data_of_k(k)
-        return {'train': self.__post_process(train_data, subsample_size, parse), \
-                'valid': self.__post_process(valid_data, subsample_size, parse)}
+        return self.__post_process(train_data, subsample_size, parse), \
+               self.__post_process(valid_data, subsample_size, parse)
 
     def __post_process(self, data, subsample_size, parse):
         data = self.__subsample(data, subsample_size, unpack=True)
@@ -82,14 +84,18 @@ class DataManager(PersistentClass):
     def dump_data_on_file(self, k, parse, file_name, parent_folder=DATASET_PATH, subsample_size=-1):
         if k == -1:
             test_data = self.structured_data['test']
-            return {'test': self.__dump_post_process(test_data, file_name + '{}_test'.format(self.class_name),
-                                                     parent_folder, subsample_size, parse)}
+            return self.__dump_post_process(test_data, file_name + '{}_test'.format(self.class_name),
+                                                     parent_folder, subsample_size, parse)
+        if self.k_fold == 1:
+            train_data = self.__get_data_of_k(0)
+            return self.__dump_post_process(train_data, file_name + '{}_train_k{}'.format(self.class_name, k),
+                                                      parent_folder, subsample_size, parse), None
         train_data = self.__get_data_of_k([kk for kk in range(self.k_fold) if kk != k])
         valid_data = self.__get_data_of_k(k)
-        return {'train': self.__dump_post_process(train_data, file_name + '{}_train_k{}'.format(self.class_name, k),
+        return self.__dump_post_process(train_data, file_name + '{}_train_k{}'.format(self.class_name, k),
                                                   parent_folder, subsample_size, parse), \
-                'valid': self.__dump_post_process(valid_data, file_name + '{}_valid_k{}'.format(self.class_name, k),
-                                                  parent_folder, subsample_size, parse)}
+                self.__dump_post_process(valid_data, file_name + '{}_valid_k{}'.format(self.class_name, k),
+                                                  parent_folder, subsample_size, parse)
 
     def __dump_post_process(self, data, file_name, parent_path, subsample_size, parse):
         data = self.__subsample(data, subsample_size, unpack=True)
@@ -131,7 +137,7 @@ class SentenceDataManager(DataManager):
         def temp_process(d, tag):
             id_format_lines = [[]]
             for i, d in enumerate(d):
-                id_format_line, length = self.parser.line2id_format(d)
+                id_format_line = self.parser.line2id_format(d)
                 id_format_lines.append(id_format_line)
             self.structured_data[tag] = np.rec.fromarrays((id_format_lines,),
                                                           shape=(len(id_format_lines),),

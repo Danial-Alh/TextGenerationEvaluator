@@ -57,16 +57,16 @@ class Options(object):
         self.cnn_b = None
         self.maxlen = mx_len
         self.n_words = v_size
-        self.filter_shape = 5
-        self.filter_size = 300
+        self.filter_shape = [2, 3]
+        self.filter_size = [100, 200]
         self.multiplier = 2
-        self.embed_size = 300
-        self.latent_size = 128
+        self.embed_size = 32
+        self.latent_size = 32
         self.lr = 1e-5
 
         self.layer = 3
         self.stride = [2, 2, 2]  # for two layer cnn/deconv , use self.stride[0]
-        self.batch_size = 256
+        self.batch_size = 64
         self.max_epochs = 100
         self.n_gan = 128  # self.filter_size * 3
         self.L = 1000
@@ -74,7 +74,7 @@ class Options(object):
         self.rnn_share_emb = True
         self.additive_noise_lambda = 0.0
         self.bp_truncation = None
-        self.n_hid = 100
+        self.n_hid = 32
 
         self.optimizer = 'Adam'  # tf.train.AdamOptimizer(beta1=0.9) #'Adam' # 'Momentum' , 'RMSProp'
         self.clip_grad = None  # None  #100  #  20#

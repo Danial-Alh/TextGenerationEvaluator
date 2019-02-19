@@ -93,7 +93,6 @@ def load_json(file_name, parent_path):
 
 def delete_file(path):
     from os import remove
-    print(remove)
     remove(path)
     print('{} file deleted!'.format(path))
 
