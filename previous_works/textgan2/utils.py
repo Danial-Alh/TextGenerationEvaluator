@@ -168,8 +168,9 @@ def read_data(source_path, target_path, opt):
 def prepare_data_for_cnn(seqs_x, opt):
     maxlen = opt.maxlen
     filter_h = opt.filter_shape
-    lengths_x = [len(s) for s in seqs_x]
-    # print lengths_x
+    lengths_x = [len(s) - 1 for s in seqs_x]
+    # print(lengths_x)
+
     if maxlen != None:
         new_seqs_x = []
         new_lengths_x = []

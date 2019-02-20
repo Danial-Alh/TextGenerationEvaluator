@@ -50,6 +50,8 @@ class Parser(PersistentClass):
                 self.START_TOKEN_ID = self.vocab2id[self.START_TOKEN]
                 self.END_TOKEN_ID = self.vocab2id[self.END_TOKEN]
         self.loaded = True
+        if result == PersistentClass.SUCCESSFUL_LOAD:
+            print(self)
         return result
 
     def _split_lines(self, lines):
@@ -136,6 +138,8 @@ class Parser(PersistentClass):
     def detokenizer(self, x):
         pass
 
+    def __str__(self):
+        return '{} parser, vocab size: {}, max len: {}'.format(self.name, self.vocab.shape[0], self.max_length)
 
 class CharacterBasedParser(Parser):
     def __init__(self, max_len=None, name=''):

@@ -6,6 +6,7 @@ from metrics.cythonics.lib.self_bleu import SelfBleu
 
 from metrics.embd import EMBD
 from metrics.fbd import FBD
+from metrics.fbd_embd import FBD_EMBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from models import BaseModel
@@ -153,8 +154,16 @@ class RealWorldEvaluator(Evaluator):
             self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-            self.fbd = FBD(self.test_data, 64, BERT_PATH)
-            self.embd = EMBD(self.test_data, 64, BERT_PATH)
+            if self.dm_name == 'emnlp' or self.dm_name == 'wiki' or \
+                    self.dm_name == 'imdb' or self.dm_name == 'threecorpus':
+                l = 41
+            elif self.dm_name == 'coco':
+                l = 26
+            elif self.dm_name == 'chpoem':
+                l = 24
+            # self.fbd = FBD(self.test_data, 64, BERT_PATH)
+            # self.embd = EMBD(self.test_data, 64, BERT_PATH)
+            self.fbd_embd = FBD_EMBD(self.test_data, 64, BERT_PATH, max_length=l)
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':
@@ -198,6 +207,8 @@ class RealWorldEvaluator(Evaluator):
 
         self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
         jaccard5_score, jaccard_cache = self.jaccard5.get_score(sample_tokens, return_cache=True)
+        fbd_embd_result = self.fbd_embd.get_score(sample_lines)
+
         scores_persample = {
             'bleu2': self.bleu2.get_score(sample_tokens),
             'bleu3': self.bleu3.get_score(sample_tokens),
@@ -214,8 +225,8 @@ class RealWorldEvaluator(Evaluator):
             'jaccard4': self.jaccard4.get_score(sample_tokens, cache=jaccard_cache),
             'jaccard3': self.jaccard3.get_score(sample_tokens, cache=jaccard_cache),
             'jaccard2': self.jaccard2.get_score(sample_tokens, cache=jaccard_cache),
-            'fbd': self.fbd.get_score(sample_lines),
-            'embd': self.embd.get_score(sample_lines)
+            'fbd': fbd_embd_result['FBD'],
+            'embd': fbd_embd_result['EMBD']
         }
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])

@@ -299,17 +299,12 @@ class TextGan(BaseModel):
     def get_persample_ll(self, samples=None, samples_loc=None):
         pass
 
-    def delete(self):
-        super().delete()
-
     def get_saving_path(self):
-        super().get_saving_path()
+        from previous_works.textgan2.textGAN import SAVE_PATH
+        return SAVE_PATH
 
     def get_name(self):
-        return 'textgan2'
-
-    def load(self):
-        super().load()
+        return 'textgan_org'
 
 
 class DGSAN(BaseModel):

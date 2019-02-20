@@ -9,7 +9,7 @@ TextGAN
 import inspect
 import os
 
-CURR_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/'
+SAVE_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/saves/'
 
 GPUID = 1
 os.environ['CUDA_VISIBLE_DEVICES'] = str(GPUID)
@@ -57,16 +57,17 @@ class Options(object):
         self.cnn_b = None
         self.maxlen = mx_len
         self.n_words = v_size
-        self.filter_shape = [2, 3]
-        self.filter_size = [100, 200]
+        self.filter_shape = 5
+        self.filter_size = 300
         self.multiplier = 2
-        self.embed_size = 32
-        self.latent_size = 32
+        self.embed_size = 300
+        self.latent_size = 128
+
         self.lr = 1e-5
 
         self.layer = 3
         self.stride = [2, 2, 2]  # for two layer cnn/deconv , use self.stride[0]
-        self.batch_size = 64
+        self.batch_size = 256
         self.max_epochs = 100
         self.n_gan = 128  # self.filter_size * 3
         self.L = 1000
@@ -74,7 +75,7 @@ class Options(object):
         self.rnn_share_emb = True
         self.additive_noise_lambda = 0.0
         self.bp_truncation = None
-        self.n_hid = 32
+        self.n_hid = 100
 
         self.optimizer = 'Adam'  # tf.train.AdamOptimizer(beta1=0.9) #'Adam' # 'Momentum' , 'RMSProp'
         self.clip_grad = None  # None  #100  #  20#
@@ -82,12 +83,14 @@ class Options(object):
         self.decay_rate = 0.99
         self.relu_w = False
 
-        self.save_path = os.path.join(CURR_PATH,
+        self.save_path = os.path.join(SAVE_PATH,
                                       "./save/" + "bird_" + str(self.n_gan) +
                                       "_dim_" + self.model + "_" + self.substitution + str(self.permutation))
-        self.log_path = os.path.join(CURR_PATH, "./log")
-        self.text_path = os.path.join(CURR_PATH, "./text")
-        if not os.path.exists(self.text_path): os.mkdir(self.text_path)
+        self.log_path = os.path.join(SAVE_PATH, "./log")
+        self.text_path = os.path.join(SAVE_PATH, "./text")
+        if not os.path.exists(self.text_path): os.makedirs(self.text_path)
+        if not os.path.exists(self.log_path): os.makedirs(self.log_path)
+        if not os.path.exists(self.save_path): os.makedirs(self.save_path)
         self.print_freq = 10
         self.valid_freq = 100
         self.sigma_range = [2]
@@ -106,6 +109,7 @@ class Options(object):
         self.sent_len4 = np.int32(floor((self.sent_len3 - self.filter_shape) / self.stride[2]) + 1)
         self.sentence = self.maxlen - 1
         print('Use model %s' % self.model)
+
         print('Use %d conv/deconv layers' % self.layer)
 
     def __iter__(self):
@@ -258,7 +262,7 @@ class TextGANMMD:
         self.ixtoword = parser.id2vocab
         self.opt = Options(parser.vocab.shape[0], parser.max_length)
         try:
-            params = np.load(os.path.join(CURR_PATH, './param_g.npz'))
+            params = np.load(os.path.join(SAVE_PATH + '../params/param_g.npz'))
             if params['Wemb'].shape == (self.opt.n_words, self.opt.embed_size):
                 print('Use saved embedding.')
                 self.opt.W_emb = params['Wemb']
@@ -362,7 +366,7 @@ class TextGANMMD:
                     print("Validation d_loss %f, g_loss %f  mean_dist %f" % (d_loss_val, g_loss_val, res['mean_dist']))
                     print("Sent: " + ' '.join([self.ixtoword[str(x)] for x in res['syn_sent'][0] if x != 0]).strip())
                     print("MMD loss %f, GAN loss %f" % (res['mmd'], res['gan']))
-                    np.savetxt(os.path.join(CURR_PATH, './text/rec_val_words.txt'),
+                    np.savetxt(os.path.join(SAVE_PATH, './text/rec_val_words.txt'),
                                res['syn_sent'], fmt='%i', delimiter=' ')
                     if self.opt.discrimination:
                         print("Real Prob %f Fake Prob %f" % (res['prob_r'], res['prob_f']))
@@ -382,7 +386,7 @@ class TextGANMMD:
                         np.median([((x - y) ** 2).sum() for x in res['real_f'] for y in res['real_f']]))
                     print("Iteration %d: d_loss %f, g_loss %f, mean_dist %f, realdist median %f" % (
                         self.uidx, d_loss, g_loss, res['mean_dist'], median_dis))
-                    np.savetxt(os.path.join(CURR_PATH, './text/rec_train_words.txt')
+                    np.savetxt(os.path.join(SAVE_PATH, './text/rec_train_words.txt')
                                , res['syn_sent'], fmt='%i', delimiter=' ')
                     print("Sent: " + ' '.join([self.ixtoword[str(x)] for x in res['syn_sent'][0] if x != 0]).strip())
                     self.saver.save(self.sess, self.opt.save_path, global_step=epoch)
@@ -404,6 +408,6 @@ class TextGANMMD:
     def generate(self):
         # x_val_batch = prepare_data_for_cnn(self.val, self.opt)
         res = self.sess.run(self.res_['syn_sent'])
-        np.savetxt(os.path.join(CURR_PATH, './text/rec_val_words.txt'),
+        np.savetxt(os.path.join(SAVE_PATH, './text/rec_val_words.txt'),
                    res, fmt='%i', delimiter=' ')
         return [list(map(lambda oo: str(oo), o)) for o in res]
