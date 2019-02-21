@@ -3,7 +3,7 @@ import argparse
 from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import OracleDataManager, SentenceDataManager
 from data_management.parsers import WordBasedParser, OracleBasedParser
-from evaluator import RealWorldEvaluator, OracleEvaluator, BestModelTracker, Dumper, k_fold
+from evaluator import RealWorldEvaluator, OracleEvaluator, BestModelTracker, Dumper
 from export_utils.evaluation_exporter import export
 from models import all_models, create_model
 
@@ -46,9 +46,16 @@ parser.add_argument('-m', '--models', type=str, help='model names', nargs='+', c
 parser.add_argument('-r', '--restore', type=str, help='restore types', nargs='+')
 args = parser.parse_args()
 
-print("********************* k fold is '%d' *********************" % k_fold)
+
+if args.restore is not None:
+    model_restore_zip = dict(zip(args.models, args.restore))
 
 dataset_prefix_name = args.data.split('-')[0]
+from evaluator import update_config
+update_config(dataset_prefix_name)
+from evaluator import k_fold
+
+print("********************* k fold is '%d' *********************" % k_fold)
 
 if args.mode == 'real':
     ParserClass, DataManagerClass, EvaluatorClass = WordBasedParser, SentenceDataManager, RealWorldEvaluator
@@ -88,7 +95,8 @@ elif args.action == 'gen':
         print('sample generation from K{}'.format(k))
         ev = EvaluatorClass(None, None, ts, parser, args.action, k, dataset_prefix_name)
 
-        ev.generate_samples(args.models, args.restore)
+        # ev.generate_samples(args.models, args.restore)
+        ev.generate_samples(model_restore_zip)
 elif args.action.startswith('eval'):
     assert args.k is not None
     m_name = args.models[0] if args.models is not None else all_models[0]
@@ -109,9 +117,11 @@ elif args.action.startswith('eval'):
         # ts = read_text('{}-valid-k{}_parsed'.format(dataset_prefix_name, k), False)
         ev = EvaluatorClass(None, None, ts, None, args.action, k, dataset_prefix_name)
         if args.action == 'eval':
-            ev.final_evaluate(args.models, args.restore)
+            # ev.final_evaluate(args.models, args.restore)
+            ev.final_evaluate(model_restore_zip)
         elif args.action == 'eval_precheck':
-            ev.eval_pre_check(args.models, args.restore)
+            # ev.eval_pre_check(args.models, args.restore)
+            ev.eval_pre_check(model_restore_zip)
 elif args.action == 'legacy':
     assert args.k is not None
     convert_legacies()

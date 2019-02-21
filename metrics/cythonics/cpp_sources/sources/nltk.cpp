@@ -99,8 +99,14 @@ double corpus_bleu(int num_refs, int max_n,
                    int smoothing_function,
                    bool auto_reweigh)
 {
-    long long p_numerators[max_n] = {0};   // Key = ngram order, and value = no. of ngram matches.
-    long long p_denominators[max_n] = {0}; // Key = ngram order, and value = no. of ngram in ref.
+    long long p_numerators[max_n];   // Key = ngram order, and value = no. of ngram matches.
+    long long p_denominators[max_n]; // Key = ngram order, and value = no. of ngram in ref.
+    for (int i = 0; i < max_n; i++)
+    {
+        p_numerators[i] = 0;
+        p_denominators[i] = 0;
+    }
+
     int hyp_lengths = 0, ref_lengths = 0;
     void (*smoothing_functions[])(int, Fraction *) = {&smooth_0, &smooth_1};
 

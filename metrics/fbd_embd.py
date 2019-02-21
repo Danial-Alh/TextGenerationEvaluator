@@ -1,6 +1,6 @@
 import numpy as np
 import ot
-from metrics.BERT.extract_features import get_features
+from metrics.bert.extract_features import get_features
 from scipy import linalg
 
 

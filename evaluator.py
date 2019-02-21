@@ -4,8 +4,6 @@ import numpy as np
 from metrics.cythonics.lib.bleu import Bleu
 from metrics.cythonics.lib.self_bleu import SelfBleu
 
-from metrics.embd import EMBD
-from metrics.fbd import FBD
 from metrics.fbd_embd import FBD_EMBD
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
@@ -27,8 +25,7 @@ class Evaluator:
         self.k = k
         self.dm_name = dm_name
         self.during_training_n_sampling = 5000
-        self.test_n_sampling = test_n_s
-
+        self.test_n_sampling = test_n_sampling
         self.init_metrics(mode)
 
     def init_metrics(self, mode):
@@ -43,85 +40,89 @@ class Evaluator:
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
         pass
 
-    def generate_samples(self, model_names, restore_types):
-        if restore_types is None:
-            restore_types = self.test_restore_types
-        if model_names is None:
-            model_names = all_models
+    def generate_samples(self, model_restore_zip):
+        # if restore_types is None:
+        #     restore_types = self.test_restore_types
+        # if model_names is None:
+        #     model_names = all_models
+        assert model_restore_zip is not None
 
-        for restore_type in restore_types:
+        for model_name, restore_type in model_restore_zip.items():
             print(restore_type)
-            for model_name in model_names:
-                print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
+            # for model_name in model_names:
+            print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
 
-                tracker = BestModelTracker(model_name, self)
-                dumper = tracker.dumper
-                model = tracker.model
-                dumper.restore_model(restore_type)
+            tracker = BestModelTracker(model_name, self)
+            dumper = tracker.dumper
+            model = tracker.model
+            dumper.restore_model(restore_type)
 
-                sample_codes = model.generate_samples(self.test_n_sampling)
-                additional_fields = self.get_sample_additional_fields(model, sample_codes,
-                                                                      self.test_data, restore_type)
+            sample_codes = model.generate_samples(self.test_n_sampling)
+            additional_fields = self.get_sample_additional_fields(model, sample_codes,
+                                                                  self.test_data, restore_type)
 
-                sample_lines = self.parser.id_format2line(sample_codes)
+            sample_lines = self.parser.id_format2line(sample_codes)
 
-                key = list(additional_fields['gen'].keys())[0]
-                min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
-                sample_lines = sample_lines[:min_len]
-                for key in additional_fields['gen']:
-                    additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
+            key = list(additional_fields['gen'].keys())[0]
+            min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
+            sample_lines = sample_lines[:min_len]
+            for key in additional_fields['gen']:
+                additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
 
-                key = list(additional_fields['test'].keys())[0]
-                min_len = min(len(self.test_data), len(additional_fields['test'][key]))
-                test_lines = self.parser.id_format2line(self.test_data[:min_len])
-                for key in additional_fields['test']:
-                    additional_fields['test'][key] = additional_fields['test'][key][:min_len]
+            key = list(additional_fields['test'].keys())[0]
+            min_len = min(len(self.test_data), len(additional_fields['test'][key]))
+            test_lines = self.parser.id_format2line(self.test_data[:min_len])
+            for key in additional_fields['test']:
+                additional_fields['test'][key] = additional_fields['test'][key][:min_len]
 
-                dumper.dump_samples_with_additional_fields(sample_lines,
-                                                           additional_fields['gen'],
-                                                           restore_type, 'gen')
-                dumper.dump_samples_with_additional_fields(test_lines,
-                                                           additional_fields['test'],
-                                                           restore_type, 'test')
-                model.delete()
+            dumper.dump_samples_with_additional_fields(sample_lines,
+                                                       additional_fields['gen'],
+                                                       restore_type, 'gen')
+            dumper.dump_samples_with_additional_fields(test_lines,
+                                                       additional_fields['test'],
+                                                       restore_type, 'test')
+            model.delete()
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
         pass
 
-    def final_evaluate(self, model_names, restore_types):
-        if restore_types is None:
-            restore_types = self.test_restore_types
-        if model_names is None:
-            model_names = all_models
+    def final_evaluate(self, model_restore_zip):
+        # if restore_types is None:
+        #     restore_types = self.test_restore_types
+        # if model_names is None:
+        #     model_names = all_models
+        assert model_restore_zip is not None
 
-        self.eval_pre_check(model_names, restore_types)
-        for restore_type in restore_types:
+        self.eval_pre_check(model_restore_zip)
+        for model_name, restore_type in model_restore_zip.items():
             print(restore_type)
-            for model_name in model_names:
-                print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
-                m = create_model(model_name, None)
-                dumper = Dumper(m, self.k, self.dm_name)
-                refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'test')
-                samples_with_additional_fields = \
-                    dumper.load_samples_with_additional_fields(restore_type, 'gen')
+            # for model_name in model_names:
+            print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
+            m = create_model(model_name, None)
+            dumper = Dumper(m, self.k, self.dm_name)
+            refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'test')
+            samples_with_additional_fields = \
+                dumper.load_samples_with_additional_fields(restore_type, 'gen')
 
-                scores_persample, scores = self.get_test_scores(refs_with_additional_fields,
-                                                                samples_with_additional_fields)
-                dumper.dump_final_results(scores, restore_type)
-                dumper.dump_final_results_details(scores_persample, restore_type)
+            scores_persample, scores = self.get_test_scores(refs_with_additional_fields,
+                                                            samples_with_additional_fields)
+            dumper.dump_final_results(scores, restore_type)
+            dumper.dump_final_results_details(scores_persample, restore_type)
 
-    def eval_pre_check(self, model_names, restore_types):
-        if restore_types is None:
-            restore_types = self.test_restore_types
-        if model_names is None:
-            model_names = all_models
+    def eval_pre_check(self, model_restore_zip):
+        # if restore_types is None:
+        #     restore_types = self.test_restore_types
+        # if model_names is None:
+        #     model_names = all_models
         print('ref/test pre checking!')
-        for restore_type in restore_types:
+        assert model_restore_zip is not None
+
+        for model_name, restore_type in model_restore_zip.items():
             print(restore_type)
-            for model_name in model_names:
-                print(model_name)
-                assert self.test_samples_equals_references(Dumper(create_model(model_name, None), self.k, self.dm_name).
-                                                           load_samples_with_additional_fields(restore_type, 'test'))
+            # for model_name in model_names:
+            print(model_name)
+            assert self.test_samples_equals_references(Dumper(create_model(model_name, None), self.k, self.dm_name).
+                                                       load_samples_with_additional_fields(restore_type, 'test'))
         print('ref/test pre checking passed!')
 
     def test_samples_equals_references(self, refs_with_additional_fields):
@@ -154,16 +155,11 @@ class RealWorldEvaluator(Evaluator):
             self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
             self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
-            if self.dm_name == 'emnlp' or self.dm_name == 'wiki' or \
-                    self.dm_name == 'imdb' or self.dm_name == 'threecorpus':
-                l = 41
-            elif self.dm_name == 'coco':
-                l = 26
-            elif self.dm_name == 'chpoem':
-                l = 24
+
             # self.fbd = FBD(self.test_data, 64, BERT_PATH)
             # self.embd = EMBD(self.test_data, 64, BERT_PATH)
-            self.fbd_embd = FBD_EMBD(self.test_data, 64, BERT_PATH, max_length=l)
+            print(BERT_PATH)
+            self.fbd_embd = FBD_EMBD(self.test_data, max_length=max_l, bert_model_dir=BERT_PATH)
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':
@@ -400,9 +396,9 @@ class BestModelTracker:
 # test_n_s = 20000
 
 ######## IMDB
-k_fold = 3
-selfbleu_n_s = 5000
-test_n_s = 10000
+# k_fold = 3
+# selfbleu_n_s = 5000
+# test_n_s = 10000
 
 ######## WIKI
 # k_fold = 3
@@ -414,3 +410,43 @@ test_n_s = 10000
 # k_fold = 14
 # selfbleu_n_s = -1
 # test_n_s = 2000
+max_l, test_n_sampling, k_fold, selfbleu_n_s = 0, 0, 0, 0
+
+
+def update_config(dm_name):
+    global max_l, test_n_sampling, k_fold, selfbleu_n_s
+    if dm_name.startswith('emnlp'):
+        k_fold = 3
+        max_l = 41
+        selfbleu_n_s = 5000
+        test_n_sampling = 20000
+    elif dm_name.startswith('wiki'):
+        k_fold = 3
+        max_l = 41
+        selfbleu_n_s = 5000
+        test_n_sampling = 24000
+    elif dm_name.startswith('imdb'):
+        k_fold = 3
+        max_l = 41
+        selfbleu_n_s = 5000
+        test_n_sampling = 10000
+    elif dm_name.startswith('threecorpus'):
+        k_fold = 3
+        max_l = 41
+        selfbleu_n_s = 5000
+        test_n_sampling = 25000
+    elif dm_name.startswith('coco'):
+        k_fold = 3
+        max_l = 26
+        selfbleu_n_s = 5000
+        test_n_sampling = 20000
+    elif dm_name.startswith('chpoem'):
+        global BERT_PATH
+        from utils.path_configs import CH_BERT_PATH
+        k_fold = 14
+        max_l = 24
+        selfbleu_n_s = -1
+        test_n_sampling = 2000
+        BERT_PATH = CH_BERT_PATH
+    else:
+        raise BaseException('dm_name {} is invalid!'.format(dm_name))
