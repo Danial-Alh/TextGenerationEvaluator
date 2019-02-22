@@ -93,7 +93,7 @@ class Evaluator:
         #     model_names = all_models
         assert model_restore_zip is not None
 
-        self.eval_pre_check(model_restore_zip)
+        # self.eval_pre_check(model_restore_zip)
         for model_name, restore_type in model_restore_zip.items():
             print(restore_type)
             # for model_name in model_names:
@@ -128,7 +128,12 @@ class Evaluator:
     def test_samples_equals_references(self, refs_with_additional_fields):
         print('checking test/ref equivalence!')
         refs = [r['text'] for r in refs_with_additional_fields]
-        return set(refs) == set(self.test_data)
+        A = set(refs)
+        B = set(self.test_data)
+        inter = len(A.intersection(B))
+        print('{}% --- {}/({},{}) intersection,{}/{} {}/{} diff'.format(inter*100/float(len(A)), inter, len(A), len(B),
+                                                                        len(A) - inter, len(A), len(B) - inter, len(B)))
+        return A == B
 
 
 class RealWorldEvaluator(Evaluator):
