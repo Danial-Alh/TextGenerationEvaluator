@@ -1,166 +1,130 @@
 import numpy as np
 
-from export_utils.evaluation_utils import TblGenerator, change_model_name, change_metric_name
 from evaluator import Dumper
-from models import all_models, create_model, out_side_trained_models
+from export_utils.evaluation_utils import make_caption, TblGenerator
+from models import create_model
+from utils.file_handler import write_text
+from utils.path_configs import TABLE_EXPORT_PATH
 
-dataset_name_dict = {"coco60": "COCO Captions", "emnlp60": "EMNLP2017 WMT News"}
+new_model_name = {"dgsan": "DGSAN",
+                  "mle": "MLE",
+                  "newmle": "NewMLE",
+                  "real": "Train Data",
+                  "textgan": "TextGAN",
+                  "leakgan": "LeakGAN",
+                  "maligan": "MaliGAN",
+                  "rankgan": "RankGAN",
+                  "seqgan": "SeqGAN"}
+model_name_orders = ['real', 'mle', 'newmle', 'seqgan', 'maligan', 'rankgan', 'textgan', 'leakgan', 'dgsan']
 
 
 class RealExporter:
-    possible_base_list = ["bleu3", "bleu4", "bleu5", "last_iter"]
-    metric_names = ["NLL", "FBD"] + ["MSJ-%d" % i for i in range(2, 6)] + \
-                   ["BLEU-%d" % i for i in range(2, 6)] + ["SBLEU-%d" % i for i in range(2, 6)]
+    metrics = {
+        'jaccard2': 'MSJ-2',
+        'jaccard3': 'MSJ-3',
+        'jaccard4': 'MSJ-4',
+        'jaccard5': 'MSJ-5',
 
-    def make_caption(self, dataset, base):
-        good_dataset_name = dataset_name_dict[dataset]
-        if base == "last_iter":
-            suffix = "maximum number of iterations"
-        else:
-            suffix = "best %s" % change_metric_name(base)
-        caption = "Performance of models (using different measures) on %s when training termination criterion is based on the %s." % (
-            good_dataset_name, suffix)
-        # caption = "Models tarined on \"%s\" data. training stop criterion based on %s." % (good_dataset_name, suffix)
-        return caption
+        'bleu2': 'BL-2',
+        'bleu3': 'BL-3',
+        'bleu4': 'BL-4',
+        'bleu5': 'BL-5',
 
-    def export_tables(self, dataset_name, inp_possible_base_list):
-        if inp_possible_base_list is None:
-            inp_possible_base_list = self.possible_base_list
-        res = {dataset_name: {}}
-        for k in range(3):
-            res[dataset_name][k] = {}
-            for base_type in inp_possible_base_list:
-                res[dataset_name][k][base_type] = {}
-                for model_name in all_models:
-                    good_model_name = change_model_name(model_name)
-                    res[dataset_name][k][base_type][good_model_name] = {}
-                    dumper = Dumper(create_model(model_name, None), k, dataset_name)
-                    for metric_name, elem in \
-                            dumper.load_final_results(base_type if model_name not in out_side_trained_models else
-                                                      'last_iter').items():
-                        good_metric_name = change_metric_name(metric_name)
-                        # elem = data[base_type + " restore type"][model_name][metric_name]
-                        res[dataset_name][k][base_type][good_model_name][good_metric_name] = elem
+        'self_bleu2': 'SBL-2',
+        'self_bleu3': 'SBL-3',
+        'self_bleu4': 'SBL-4',
+        'self_bleu5': 'SBL-5',
 
-                    # good_model_name = change_model_name(model_name)
-                    # elem = fbd[dataset_name][str(k)][model_name][base_type]
-                    # res[dataset_name][k][base_type][good_model_name]["FBD"] = elem
-
-        for base_type in self.possible_base_list:
-            best_mask = {x: None for x in self.metric_names}
-            best_value = {x: None for x in self.metric_names}
-
-            for model_name in all_models:
-                for metric_name in self.metric_names:
-                    tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
-                    mu, sigma = np.mean(tmp), np.std(tmp)
-                    # nll is ll!
-                    if metric_name == "FBD" or metric_name.startswith("SBLEU"):
-                        mu *= -1
-
-                    vl = best_value[metric_name]
-                    if vl is None or mu > vl:
-                        best_value[metric_name] = mu
-                        best_mask[metric_name] = model_name
-
-            caption = self.make_caption(dataset_name, base_type)
-            tbl = TblGenerator(["Model"] + self.metric_names, caption, "scriptsize",
-                               "table:%s:%s" % (dataset_name, "last" if base_type == "last_iter" else base_type))
-            for model_name in all_models:
-                metric_results = []
-                for metric_name in self.metric_names:
-                    tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
-                    # metric_results.append("$%.2f$ \\newline $\\pm %.2f$" % (np.mean(tmp), np.std(tmp)))
-                    mu, sigma = np.mean(tmp), np.std(tmp)
-
-                    if metric_name == "NLL":
-                        mu *= -1
-                    s = ""
-                    if best_mask[metric_name] == model_name:
-                        assert abs(best_value[metric_name]) == abs(mu), (best_value[metric_name], mu)
-                        s = " \\begin{tabular}{@{}c@{}} $\mathbf{%.3f}$ \\\\ $\mathbf{\pm %.2f}$\\end{tabular} "
-                    else:
-                        s = " \\begin{tabular}{@{}c@{}} $%.3f$ \\\\ $\pm %.2f$\\end{tabular} "
-
-                    metric_results.append(s % (mu, sigma))
-
-                tbl.add_row([model_name] + metric_results)
-            print(str(tbl))
+        'fbd': 'FBD',
+        'embd': 'W2BD',
+        '-nll': 'NLL',
+    }
+    datasets = {
+        "coco60": "COCO Captions",
+        "emnlp60": "EMNLP2017 WMT News",
+        "wiki72": "Wikitext 103",
+        "threecorpus75": "Three Corpus (TextGan)",
+        "imdb30": "IMDB Movie Reviews",
+        "chpoem5": "Chinese Poem",
+    }
+    metric_names = ["NLL", "FBD", "W2BD"]
+    metric_names += ["MSJ-%d" % i for i in range(2, 6)]
+    metric_names += ["BL-%d" % i for i in range(2, 6)]
+    metric_names += ["SBL-%d" % i for i in range(2, 6)]
 
 
 class OracleExporter:
-    possible_base_list = ["-nll_oracle", "last_iter"]
-    metric_names = ["NLL", "OracleNLL", "Bhattacharyya", "Jeffreys"]
-
-    def make_caption(self, base):
-        if base == "last_iter":
-            suffix = "maximum number of iterations"
-        elif base == "-nll_oracle":
-            suffix = "best NLLOracle"
-        caption = "Performance of models (using different measures) on synthetic oracle " \
-                  "when training termination criterion is based on the %s." % (suffix)
-        # caption = "Models tarined on \"%s\" data. training stop criterion based on %s." % (good_dataset_name, suffix)
-        return caption
-
-    def export_tables(self, dataset_name, inp_possible_base_list):
-        if inp_possible_base_list is None:
-            inp_possible_base_list = self.possible_base_list
-        res = {}
-        for k in range(3):
-            res[k] = {}
-            for base_type in inp_possible_base_list:
-                res[k][base_type] = {}
-                for model_name in all_models:
-                    good_model_name = change_model_name(model_name)
-                    res[k][base_type][good_model_name] = {}
-                    dumper = Dumper(create_model(model_name, None), k, dataset_name)
-                    for metric_name, elem in dumper.load_final_results(base_type).items():
-                        good_metric_name = change_metric_name(metric_name)
-                        res[k][base_type][good_model_name][good_metric_name] = elem
-
-        for base_type in self.possible_base_list:
-            best_mask = {x: None for x in self.metric_names}
-            best_value = {x: None for x in self.metric_names}
-
-            for model_name in all_models:
-                for metric_name in self.metric_names:
-                    tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
-                    mu, sigma = np.mean(tmp), np.std(tmp)
-                    # nll is ll!
-                    if metric_name == "Jeffreys" or metric_name == "Bhattacharyya":
-                        mu *= -1
-
-                    vl = best_value[metric_name]
-                    if vl is None or mu > vl:
-                        best_value[metric_name] = mu
-                        best_mask[metric_name] = model_name
-
-            caption = self.make_caption(base_type)
-            tbl_label_suffix = "last" if base_type == "last_iter" else "nlloracle"
-            tbl = TblGenerator(["Model"] + self.metric_names, caption, "small", "table:synthetic:%s" % tbl_label_suffix)
-            for model_name in all_models:
-                metric_results = []
-                for metric_name in self.metric_names:
-                    tmp = [res[dataset_name][k][base_type][model_name][metric_name] for k in range(3)]
-                    # metric_results.append("$%.2f$ \\newline $\\pm %.2f$" % (np.mean(tmp), np.std(tmp)))
-                    mu, sigma = np.mean(tmp), np.std(tmp)
-
-                    if metric_name == "NLL" or metric_name == "OracleNLL":
-                        mu *= -1. / 20.
-                    s = ""
-                    if best_mask[metric_name] == model_name:
-                        assert abs(best_value[metric_name]) == abs(mu), (best_value[metric_name], mu)
-                        s = " \\begin{tabular}{@{}c@{}} $\mathbf{%.3f}$ \\\\ $\mathbf{\pm %.2f}$\\end{tabular} "
-                    else:
-                        s = " \\begin{tabular}{@{}c@{}} $%.3f$ \\\\ $\pm %.2f$\\end{tabular} "
-
-                    metric_results.append(s % (mu, sigma))
-
-                tbl.add_row([model_name] + metric_results)
-            print(str(tbl))
+    metrics = {
+        "jeffreys": "Jeffreys",
+        "bhattacharyya": "Bhattacharyya",
+        "lnp_fromq": "OracleNLL",
+        "lnq_fromp": "NLL",
+    }
 
 
-def export(training_mode, dataset_name, base_types):
+def read_data(exporter, dataset_name, model_restore_zip):
+    from evaluator import k_fold
+    res = {}
+    for model_name, restore_type in model_restore_zip.items():
+        res[model_name] = []
+        for k in range(k_fold if k_fold == 3 else 3):
+            dumper = Dumper(create_model(model_name, None), k, dataset_name)
+            res[model_name].append(dumper.load_final_results(restore_type))
+    new_res = {}
+    for model_name in model_restore_zip:
+        new_res[model_name] = {}
+        for metric in exporter.metrics:
+            values = np.array([res[model_name][k][metric] for k in range(len(res[model_name]))])
+            if metric == '-nll':
+                values *= -1
+            if len(res[model_name]) > 1:
+                new_res[model_name][exporter.metrics[metric]] = {'mean': np.mean(values), 'std': np.std(values)}
+            else:
+                new_res[model_name][exporter.metrics[metric]] = {'mean': np.mean(values)}
+    res = new_res
+    return res
+
+
+def export_tables(training_mode, dataset_name, model_restore_zip):
     exporter = RealExporter if training_mode == 'real' else OracleExporter
-    exporter = exporter()
-    exporter.export_tables(dataset_name, base_types)
+    res = read_data(exporter, dataset_name, model_restore_zip)
+
+    best_model = {x: None for x in exporter.metric_names}
+
+    import re
+    for metric_name in exporter.metric_names:
+        model_names = [m for m in model_restore_zip.keys() if m != 'real']
+        mu = np.array([res[model_name][metric_name]['mean'] for model_name in model_names])
+        # nll is ll!
+        if re.match('^(FBD|W2BD|NLL|SBL.*)$', metric_name):
+            mu *= -1.
+        best_model[metric_name] = model_names[int(np.argmax(mu))]
+    old_dataset_name = dataset_name
+    dataset_name = exporter.datasets[dataset_name]
+    caption = make_caption(dataset_name)
+    tbl = TblGenerator(["Method"] + list(map(lambda x: "%s" % x, exporter.metric_names)), caption, "scriptsize",
+                       "table:%s" % (dataset_name,),
+                       # [1, 4, 4, 4])
+                       [1, 2, 4, 4, 4])
+    for model_name in model_name_orders:
+        if model_name not in model_restore_zip:
+            continue
+        metric_results = []
+        for metric_name in exporter.metric_names:
+            if 'std' in res[model_name][metric_name]:
+                mu, sigma = res[model_name][metric_name]['mean'], res[model_name][metric_name]['std']
+                if best_model[metric_name] == model_name or model_name == 'real':
+                    s = " \\begin{tabular}{@{}c@{}} $\mathbf{%.3f}$ \\\\ $\mathbf{\pm %.2f}$\\end{tabular}"
+                else:
+                    s = " \\begin{tabular}{@{}c@{}} $%.3f$ \\\\ $\pm %.2f$\\end{tabular} "
+                metric_results.append(s % (mu, sigma))
+            else:
+                mu = res[model_name][metric_name]['mean']
+                if best_model[metric_name] == model_name or model_name == 'real':
+                    s = "$\mathbf{%.3f}$"
+                else:
+                    s = "$%.3f$"
+                metric_results.append(s % (mu,))
+
+        tbl.add_row(["%s" % new_model_name[model_name]] + metric_results)
+    write_text([str(tbl)], '{}_table_latex'.format(old_dataset_name), TABLE_EXPORT_PATH)

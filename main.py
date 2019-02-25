@@ -4,7 +4,6 @@ from data_management.data_loaders import SentenceDataloader
 from data_management.data_manager import OracleDataManager, SentenceDataManager
 from data_management.parsers import WordBasedParser, OracleBasedParser
 from evaluator import RealWorldEvaluator, OracleEvaluator, BestModelTracker, Dumper
-from export_utils.evaluation_exporter import export
 from models import all_models, create_model
 
 parser = argparse.ArgumentParser()
@@ -48,7 +47,9 @@ args = parser.parse_args()
 
 
 if args.restore is not None:
+    args.restore = [r if r != 'nll' else '-nll' for r in args.restore]
     model_restore_zip = dict(zip(args.models, args.restore))
+    print(model_restore_zip)
 
 dataset_prefix_name = args.data.split('-')[0]
 from evaluator import update_config
@@ -128,7 +129,11 @@ elif args.action == 'legacy':
     assert args.k is not None
     convert_legacies()
 elif args.action == 'export':
-    export(args.mode, dataset_prefix_name, args.restore)
+    from export_utils.evaluation_exporter import export_tables
+    from export_utils.histogram_exporter import export_histogram
+    export_tables(args.mode, dataset_prefix_name, model_restore_zip)
+    for k in args.k:
+        export_histogram(args.mode, dataset_prefix_name, model_restore_zip, k)
 elif args.action == 'dump':
     assert args.k is not None
     parser = ParserClass(name=dataset_prefix_name + '-words')

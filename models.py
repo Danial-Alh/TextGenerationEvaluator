@@ -335,6 +335,14 @@ class Mle180(BaseModel):
     pass
 
 
+class NewMLE(BaseModel):
+    pass
+
+
+class Real(BaseModel):
+    pass
+
+
 def create_model(model_name, parser):
     model_name = model_name.lower()
     model_class = model_name_class_mapping[model_name]
@@ -347,12 +355,11 @@ def create_model(model_name, parser):
 
 model_name_class_mapping = {
     'dgsan': DGSAN, 'dgsan1': DGSAN1, 'dgsan9': DGSAN9, 'dgsan18': DGSAN18, 'dgan': DGAN, 'cdgsan': CDGSAN,
-    'mle180': Mle180,
     'leakgan': LeakGan, 'textgan': TextGan,
-    'seqgan': TexyGen, 'rankgan': TexyGen, 'maligan': TexyGen, 'mle': TexyGen
+    'seqgan': TexyGen, 'rankgan': TexyGen, 'maligan': TexyGen,
+    'mle': TexyGen, 'mle180': Mle180, 'newmle': NewMLE, 'real': Real
 }
 all_models = model_name_class_mapping.keys()
-out_side_trained_models = ['dgsan', 'dgsan1', 'dgsan9', 'dgsan18', 'dgan', 'cdgsan', 'mle180']
 
 if __name__ == '__main__':
     dm = SentenceDataManager([SentenceDataloader('coco60-train')], 'coco-words', k_fold=3)

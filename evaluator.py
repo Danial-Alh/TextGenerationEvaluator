@@ -202,6 +202,7 @@ class RealWorldEvaluator(Evaluator):
 
         if self.selfbleu_n_sampling == -1:
             subsampled_tokens = sample_tokens
+            subsamples_mask = [i for i in range(len(sample_tokens))]
         else:
             subsamples_mask = np.random.choice(range(len(sample_tokens)), self.selfbleu_n_sampling, replace=False)
             subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
@@ -219,8 +220,12 @@ class RealWorldEvaluator(Evaluator):
             'self_bleu4': SelfBleu(subsampled_tokens, weights=np.ones(4) / 4., other_instance=self_bleu5).get_score(),
             'self_bleu3': SelfBleu(subsampled_tokens, weights=np.ones(3) / 3., other_instance=self_bleu5).get_score(),
             'self_bleu2': SelfBleu(subsampled_tokens, weights=np.ones(2) / 2., other_instance=self_bleu5).get_score(),
-            '-nll': [r['lnq'] for r in refs_with_additional_fields]
+            '-nll': [r['lnq'] for r in refs_with_additional_fields],
         }
+        scores_persample['sub_bleu2'] = list(np.array(scores_persample['bleu2'])[subsamples_mask])
+        scores_persample['sub_bleu3'] = list(np.array(scores_persample['bleu3'])[subsamples_mask])
+        scores_persample['sub_bleu4'] = list(np.array(scores_persample['bleu4'])[subsamples_mask])
+        scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
         scores_mean = {
             'jaccard5': jaccard5_score,
             'jaccard4': self.jaccard4.get_score(sample_tokens, cache=jaccard_cache),
