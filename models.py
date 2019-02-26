@@ -343,6 +343,14 @@ class Real(BaseModel):
     pass
 
 
+class DGSANE1(BaseModel):
+    pass
+
+
+class DGSANE5(BaseModel):
+    pass
+
+
 def create_model(model_name, parser):
     model_name = model_name.lower()
     model_class = model_name_class_mapping[model_name]
@@ -355,6 +363,7 @@ def create_model(model_name, parser):
 
 model_name_class_mapping = {
     'dgsan': DGSAN, 'dgsan1': DGSAN1, 'dgsan9': DGSAN9, 'dgsan18': DGSAN18, 'dgan': DGAN, 'cdgsan': CDGSAN,
+    'dgsane1': DGSANE1, 'dgsane5': DGSANE5,
     'leakgan': LeakGan, 'textgan': TextGan,
     'seqgan': TexyGen, 'rankgan': TexyGen, 'maligan': TexyGen,
     'mle': TexyGen, 'mle180': Mle180, 'newmle': NewMLE, 'real': Real

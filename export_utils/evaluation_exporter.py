@@ -9,7 +9,7 @@ from utils.path_configs import TABLE_EXPORT_PATH
 new_model_name = {"dgsan": "DGSAN",
                   "mle": "MLE",
                   "newmle": "NewMLE",
-                  "real": "Train Data",
+                  "real": "Real Data",
                   "textgan": "TextGAN",
                   "leakgan": "LeakGAN",
                   "maligan": "MaliGAN",
@@ -35,8 +35,8 @@ class RealExporter:
         'self_bleu4': 'SBL-4',
         'self_bleu5': 'SBL-5',
 
-        'fbd': 'FBD',
-        'embd': 'W2BD',
+        # 'fbd': 'FBD',
+        # 'embd': 'W2BD',
         '-nll': 'NLL',
     }
     datasets = {
@@ -47,10 +47,11 @@ class RealExporter:
         "imdb30": "IMDB Movie Reviews",
         "chpoem5": "Chinese Poem",
     }
-    metric_names = ["NLL", "FBD", "W2BD"]
+    metric_names = ["NLL"]  # , "FBD", "W2BD"]
     metric_names += ["MSJ-%d" % i for i in range(2, 6)]
     metric_names += ["BL-%d" % i for i in range(2, 6)]
     metric_names += ["SBL-%d" % i for i in range(2, 6)]
+    # metric_names = [mm for mm in metric_names if mm in metrics.values()]
 
 
 class OracleExporter:
@@ -104,23 +105,26 @@ def export_tables(training_mode, dataset_name, model_restore_zip):
     caption = make_caption(dataset_name)
     tbl = TblGenerator(["Method"] + list(map(lambda x: "%s" % x, exporter.metric_names)), caption, "scriptsize",
                        "table:%s" % (dataset_name,),
-                       # [1, 4, 4, 4])
-                       [1, 2, 4, 4, 4])
+                       [1, 4, 4, 4])
+    # [1, 2, 4, 4, 4])
     for model_name in model_name_orders:
         if model_name not in model_restore_zip:
             continue
         metric_results = []
         for metric_name in exporter.metric_names:
-            if 'std' in res[model_name][metric_name]:
+            if metric_name == 'NLL' and model_name == 'real':
+                s = "-"
+                metric_results.append(s)
+            elif 'std' in res[model_name][metric_name]:
                 mu, sigma = res[model_name][metric_name]['mean'], res[model_name][metric_name]['std']
-                if best_model[metric_name] == model_name or model_name == 'real':
-                    s = " \\begin{tabular}{@{}c@{}} $\mathbf{%.3f}$ \\\\ $\mathbf{\pm %.2f}$\\end{tabular}"
+                if best_model[metric_name] == model_name:  # or model_name == 'real':
+                    s = " \\begin{tabular}{@{}c@{}} $\mathbf{%.3f}$ \\\\ $\pm %.3f$\\end{tabular}"
                 else:
-                    s = " \\begin{tabular}{@{}c@{}} $%.3f$ \\\\ $\pm %.2f$\\end{tabular} "
+                    s = " \\begin{tabular}{@{}c@{}} $%.3f$ \\\\ $\pm %.3f$\\end{tabular} "
                 metric_results.append(s % (mu, sigma))
             else:
                 mu = res[model_name][metric_name]['mean']
-                if best_model[metric_name] == model_name or model_name == 'real':
+                if best_model[metric_name] == model_name:  # or model_name == 'real':
                     s = "$\mathbf{%.3f}$"
                 else:
                     s = "$%.3f$"
