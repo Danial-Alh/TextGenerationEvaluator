@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import ot
 from scipy import linalg
@@ -5,6 +7,7 @@ from scipy import linalg
 from metrics.bert.extract_features import get_features
 
 
+# https://arxiv.org/pdf/1706.08500.pdf
 # from https://github.com/bioinf-jku/TTUR/blob/master/fid.py
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     """Numpy implementation of the Frechet Distance.
@@ -86,13 +89,23 @@ class BertDistance:
             "[!] Warning: different size between reference and input can be effect on the result."
 
         mu, sigma = self._calculate_statistics(features)
-        FBD_res = calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma)
+        FBD_res = math.sqrt(calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma))
 
+        # FBD W1_on euclidean metric between gaussian: http://djalil.chafai.net/blog/2010/04/30/wasserstein-distance-between-two-gaussians/
         res = {"FBD": FBD_res}
 
-        for dis in ["sqeuclidean", "cosine", "euclidean"]:
-            M = ot.dist(self.reference_features, features, metric=dis)
-            res["WBD_%s" % dis] = ot.emd2(a=[], b=[], M=M)
+        # Todo : use probability of sample for weighting samples
+        M = ot.dist(self.reference_features, features, metric="euclidean")
+        res["W1_euclidean"] = ot.emd2(a=[], b=[], M=M)
+
+        M = ot.dist(self.reference_features, features, metric="sqeuclidean")
+        res["W2_euclidean"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
+
+        M = ot.dist(self.reference_features, features, metric="cosine")
+        res["W1_cosine"] = ot.emd2(a=[], b=[], M=M)
+
+        M = np.square(ot.dist(self.reference_features, features, metric="cosine"))
+        res["W2_cosine"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
         return res
 
 
@@ -124,5 +137,6 @@ if __name__ == "__main__":
     metric_names = res[cats[0]][cats[1]].keys()
     print("\t".join(cats))
     for metric_name in metric_names:
+        print("=" * 15 + "[" + metric_name + "]" + "=" * 15)
         for cat1 in cats:
             print("\t".join([cat1] + list(map(str, [res[cat1][cat2][metric_name] for cat2 in cats]))))
