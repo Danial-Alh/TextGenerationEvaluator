@@ -4,7 +4,7 @@ import numpy as np
 from metrics.cythonics.lib.bleu import Bleu
 from metrics.cythonics.lib.self_bleu import SelfBleu
 
-from metrics.fbd_embd import FBD_EMBD
+from metrics.bert_distance import BertDistance
 from metrics.ms_jaccard import MSJaccard
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from models import BaseModel
@@ -164,7 +164,7 @@ class RealWorldEvaluator(Evaluator):
             # self.fbd = FBD(self.test_data, 64, BERT_PATH)
             # self.embd = EMBD(self.test_data, 64, BERT_PATH)
             print(BERT_PATH)
-            self.fbd_embd = FBD_EMBD(self.test_data, max_length=max_l, bert_model_dir=BERT_PATH)
+            self.fbd_embd = BertDistance(self.test_data, max_length=max_l, bert_model_dir=BERT_PATH)
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':

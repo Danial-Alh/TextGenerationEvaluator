@@ -1,9 +1,13 @@
+import math
+
 import numpy as np
+import ot
 from scipy import linalg
 
 from metrics.bert.extract_features import get_features
 
 
+# https://arxiv.org/pdf/1706.08500.pdf
 # from https://github.com/bioinf-jku/TTUR/blob/master/fid.py
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     """Numpy implementation of the Frechet Distance.
@@ -57,40 +61,82 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
 
 
-class FBD:
+class BertDistance:
     # inputs must be list of real text as str, not tokenized or ...
-    def __init__(self, refrence_list_of_text, max_length=32, bert_model_dir="../data/bert_models/", lower_case=True,
+    def __init__(self, refrence_list_of_text, max_length=45, bert_model_dir="../data/bert_models/", lower_case=True,
                  batch_size=8):
         self.max_length = max_length
         self.bert_model_dir = bert_model_dir
         self.lower_case = lower_case
         self.batch_size = batch_size
 
-        self.refrence_mu, self.refrence_sigma = self._calculate_statistics(refrence_list_of_text)
+        self.reference_features = self._get_features(refrence_list_of_text)  # sample * feature
+        assert self.reference_features.shape[0] == len(refrence_list_of_text)
+        self.refrence_mu, self.refrence_sigma = self._calculate_statistics(self.reference_features)
 
     def _get_features(self, list_of_text):
         return get_features(list_of_text=list_of_text, max_length=self.max_length, bert_moded_dir=self.bert_model_dir,
                             lower_case=self.lower_case, batch_size=self.batch_size)
 
-    def _calculate_statistics(self, list_of_text):
-        features = self._get_features(list_of_text)
+    def _calculate_statistics(self, features):
         mu = np.mean(features, axis=0)
         sigma = np.cov(features, rowvar=False)
         return mu, sigma
 
     def get_score(self, list_of_text):
-        mu, sigma = self._calculate_statistics(list_of_text)
-        return calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma)
+        features = self._get_features(list_of_text)
+        assert not diff(self.reference_features.shape[0], features.shape[0]), \
+            "[!] Warning: different size between reference and input can be effect on the result."
+
+        mu, sigma = self._calculate_statistics(features)
+        FBD_res = math.sqrt(calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma))
+
+        # FBD W1_on euclidean metric between gaussian: http://djalil.chafai.net/blog/2010/04/30/wasserstein-distance-between-two-gaussians/
+        res = {"FBD": FBD_res}
+
+        # Todo : use probability of sample for weighting samples
+        M = ot.dist(self.reference_features, features, metric="euclidean")
+        res["W1_euclidean"] = ot.emd2(a=[], b=[], M=M)
+
+        M = ot.dist(self.reference_features, features, metric="sqeuclidean")
+        res["W2_euclidean"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
+
+        M = ot.dist(self.reference_features, features, metric="cosine")
+        res["W1_cosine"] = ot.emd2(a=[], b=[], M=M)
+
+        M = np.square(ot.dist(self.reference_features, features, metric="cosine"))
+        res["W2_cosine"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
+        return res
+
+
+def diff(a, b, thresh=0.05):
+    return float(abs(a - b)) / float(min(a, b)) > thresh
 
 
 if __name__ == "__main__":
-    from datamanagers.datamanager import DataManager
+    from sklearn.datasets import fetch_20newsgroups
+    import nltk
 
-    datamanager = DataManager(batch_size=64, length=20, vocab_size=None,
-                              minlength_threshold=-1,
-                              dataset_path="../data/dataset/coco/train.txt",
-                              dict_path="../data/dataset/coco/dict.pickle")
-    tmp = datamanager.subsample_sequences(10000, True)
-    reverse_func = lambda listolist: datamanager.reverse(listolist).split("\n")
-    fbd = FBD(reverse_func(tmp[:5000]), bert_model_dir="../data/bert_models/uncased_L-12_H-768_A-12/")
-    print(fbd.get_score(reverse_func(tmp[5000:])))
+
+    def data(cat):
+        data = fetch_20newsgroups(subset='train', categories=[cat]).data
+        res = []
+        for doc in data:
+            res += nltk.sent_tokenize(doc)[4:]
+        return res[:100]
+
+
+    cats = ["rec.sport.hockey", "rec.motorcycles", "sci.space"]
+    res = {}
+    for cat1 in cats:
+        res[cat1] = {}
+        evaluator = BertDistance(data(cat1), bert_model_dir="./data/bert_models/")
+        for cat2 in cats:
+            res[cat1][cat2] = evaluator.get_score(data(cat2))
+
+    metric_names = res[cats[0]][cats[1]].keys()
+    print("\t".join(cats))
+    for metric_name in metric_names:
+        print("=" * 15 + "[" + metric_name + "]" + "=" * 15)
+        for cat1 in cats:
+            print("\t".join([cat1] + list(map(str, [res[cat1][cat2][metric_name] for cat2 in cats]))))
