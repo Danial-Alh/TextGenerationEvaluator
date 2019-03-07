@@ -200,6 +200,8 @@ class RealWorldEvaluator(Evaluator):
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
+        min_size = min(len(samples_with_additional_fields), len(refs_with_additional_fields))
+        sample_tokens = sample_tokens[:min_size]
 
         if self.selfbleu_n_sampling == -1:
             subsampled_tokens = sample_tokens
@@ -295,6 +297,8 @@ class OracleEvaluator(Evaluator):
         from metrics.divergences import Bhattacharyya, Jeffreys
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
+        min_size = min(len(samples_with_additional_fields), len(refs_with_additional_fields))
+        sample_tokens = sample_tokens[:min_size]
 
         if self.selfbleu_n_sampling == -1:
             subsampled_tokens = sample_tokens
@@ -365,15 +369,15 @@ class Dumper:
     def dump_generated_samples(self, samples, load_key, temperature):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, temperature + '_' +
+        write_text(samples, os.path.join(self.saving_path, format(temperature, '.1f') + '_' +
                                          load_key + '_based_samples.txt'), is_complete_path=True)
 
     def load_generated_samples(self, load_key, temperature):
-        return read_text(os.path.join(self.saving_path, temperature + '_' +
+        return read_text(os.path.join(self.saving_path, format(temperature, '.1f') + '_' +
                                       load_key + '_based_samples.txt'), is_complete_path=True)
 
     def get_generated_samples_path(self, load_key, temperature):
-        return os.path.join(self.saving_path, temperature + '_' +
+        return os.path.join(self.saving_path, format(temperature, '.1f') + '_' +
                             load_key + '_based_samples.txt')
 
     def dump_best_history(self, best_history):
@@ -384,26 +388,26 @@ class Dumper:
         dump_json([
             {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
-            sample_label + '_' + temperature + '_' + load_key + '_based_samples', self.saving_path)
+            sample_label + '_' + format(temperature, '.1f') + '_' + load_key + '_based_samples', self.saving_path)
 
     def load_samples_with_additional_fields(self, load_key, sample_label, temperature):
-        result = load_json(sample_label + '_' + temperature + '_' + load_key + '_based_samples', self.saving_path)
+        result = load_json(sample_label + '_' + format(temperature, '.1f') + '_' + load_key + '_based_samples', self.saving_path)
         return result
 
     def dump_final_results(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + '_' + temperature +
+        dump_json(results, self.final_result_file_name + '_' + format(temperature, '.1f') +
                   '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def load_final_results(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + '_' + temperature +
+        return load_json(self.final_result_file_name + '_' + format(temperature, '.1f') +
                          '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def dump_final_results_details(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + '_' + temperature + '_' + restore_type + 'restore_details',
+        dump_json(results, self.final_result_file_name + '_' + format(temperature, '.1f') + '_' + restore_type + 'restore_details',
                   self.final_result_parent_path)
 
     def load_final_results_details(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + '_' + temperature + '_' + restore_type + 'restore_details',
+        return load_json(self.final_result_file_name + '_' + format(temperature, '.1f') + '_' + restore_type + 'restore_details',
                          self.final_result_parent_path)
 
 

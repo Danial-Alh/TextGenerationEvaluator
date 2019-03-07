@@ -139,14 +139,14 @@ class GeneralGenerator(object):
             gen_x = gen_x.write(i, next_token)  # indices, batch_size
             return i + 1, x_tp1, h_t, gen_o, gen_x
 
-        _, _, _, self.gen_o, self.gen_x = control_flow_ops.while_loop(
+        _, _, _, self.temp_gen_o, self.temp_gen_x = control_flow_ops.while_loop(
             cond=lambda i, _1, _2, _3, _4: i < self.sequence_length,
             body=_temperature_g_recurrence,
             loop_vars=(tf.constant(0, dtype=tf.int32),
                        tf.nn.embedding_lookup(self.g_embeddings, self.start_token), self.h0, t_gen_o, t_gen_x))
 
-        self.temp_gen_x = self.gen_x.stack()  # seq_length x batch_size
-        self.temp_gen_x = tf.transpose(self.gen_x, perm=[1, 0])  # batch_size x seq_length
+        self.temp_gen_x = self.temp_gen_x.stack()  # seq_length x batch_size
+        self.temp_gen_x = tf.transpose(self.temp_gen_x, perm=[1, 0])  # batch_size x seq_length
 
     def temperature_generate(self, sess, temperature):
         outputs = sess.run(self.temp_gen_x, {self.temperature: temperature})

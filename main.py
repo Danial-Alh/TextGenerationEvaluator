@@ -51,7 +51,8 @@ if args.restore is not None:
     model_restore_zip = dict(zip(args.models, args.restore))
     print(model_restore_zip)
 if args.temperatures is None:
-    args.temperatures = [None]
+    args.temperatures = [1.]
+print('temperatures: {}, K: {}'.format(args.temperatures, args.k))
 
 dataset_prefix_name = args.data.split('-')[0]
 from evaluator import update_config
@@ -98,7 +99,8 @@ elif args.action == 'gen':
     ts = parser.line2id_format(test_data_loader.get_data())
     for temperature in args.temperatures:
         for k in args.k:
-            print('sample generation from K{}, temperature: {}'.format(k, temperature))
+            print('********************* sample generation K{}, temperature: {} *********************'.
+                  format(k, temperature))
             ev = EvaluatorClass(None, None, ts, parser, args.action, k, temperature, dataset_prefix_name)
             # ev.generate_samples(args.models, args.restore)
             ev.generate_samples(model_restore_zip)
@@ -113,8 +115,8 @@ elif args.action.startswith('eval'):
     ts = test_data_loader.get_data()
     for temperature in args.temperatures:
         for k in args.k:
-            print('********************* evaluating K{}, temperature: {} *********************'.format(k,
-                                                                                                       temperature))
+            print('********************* evaluating K{}, temperature: {} *********************'.
+                  format(k, temperature))
             m = create_model(m_name, None)
             dmp = Dumper(m, k, dataset_prefix_name)
             # ts = [r['text'] for r in dmp.load_samples_with_additional_fields(restore_type, 'test')]
