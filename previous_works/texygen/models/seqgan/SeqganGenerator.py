@@ -133,6 +133,7 @@ class Generator(SavableModel, GeneralGenerator):
 
         self.g_grad, _ = tf.clip_by_global_norm(tf.gradients(self.g_loss, self.g_params), self.grad_clip)
         self.g_updates = g_opt.apply_gradients(zip(self.g_grad, self.g_params))
+        GeneralGenerator.__init__(self)
 
     def generate(self, sess):
         outputs = sess.run(self.gen_x)

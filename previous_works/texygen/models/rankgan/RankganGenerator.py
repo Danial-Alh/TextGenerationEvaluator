@@ -2,10 +2,11 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 
+from previous_works.texygen.models.Gan import GeneralGenerator
 from ...models.Gan import SavableModel
 
 
-class Generator(SavableModel):
+class Generator(SavableModel, GeneralGenerator):
     def __init__(self, num_vocabulary, batch_size, emb_dim, hidden_dim,
                  sequence_length, start_token,
                  learning_rate=0.01, reward_gamma=0.95):
@@ -131,6 +132,7 @@ class Generator(SavableModel):
 
         self.g_grad, _ = tf.clip_by_global_norm(tf.gradients(self.g_loss, self.g_params), self.grad_clip)
         self.g_updates = g_opt.apply_gradients(zip(self.g_grad, self.g_params))
+        GeneralGenerator.__init__(self)
 
     def generate(self, sess):
         outputs = sess.run(self.gen_x)
