@@ -92,20 +92,20 @@ class BertDistance:
         FBD_res = math.sqrt(calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma))
 
         # FBD W1_on euclidean metric between gaussian: http://djalil.chafai.net/blog/2010/04/30/wasserstein-distance-between-two-gaussians/
-        res = {"FBD": FBD_res}
+        res = {"fbd": FBD_res}
 
         # Todo : use probability of sample for weighting samples
         M = ot.dist(self.reference_features, features, metric="euclidean")
-        res["W1_euclidean"] = ot.emd2(a=[], b=[], M=M)
+        res["w1_euclidean"] = ot.emd2(a=[], b=[], M=M)
 
         M = ot.dist(self.reference_features, features, metric="sqeuclidean")
-        res["W2_euclidean"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
+        res["w2_euclidean"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
 
         M = ot.dist(self.reference_features, features, metric="cosine")
-        res["W1_cosine"] = ot.emd2(a=[], b=[], M=M)
+        res["w1_cosine"] = ot.emd2(a=[], b=[], M=M)
 
         M = np.square(ot.dist(self.reference_features, features, metric="cosine"))
-        res["W2_cosine"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
+        res["w2_cosine"] = math.sqrt(ot.emd2(a=[], b=[], M=M))
         return res
 
 

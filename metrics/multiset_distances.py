@@ -56,14 +56,14 @@ class MultisetDistances:
                                             for key in ngrams_abs_diff[n]])
                                     for n in range(self.max_n)]
         for p in range(1, self.max_mikowski_order + 1):
-            temp_results['minkowski-p%d' % (p,)] = [np.power(np.sum(np.power(list(ngrams_abs_diff[n].values()), p))
+            temp_results['p%d-minkowski' % (p,)] = [np.power(np.sum(np.power(list(ngrams_abs_diff[n].values()), p))
                                                              , 1. / p)
                                                     for n in range(self.max_n)]
 
         result = {}
         for key in temp_results:
             for n in range(self.min_n, self.max_n + 1):
-                result[key + '-%d' % n] = np.power(reduce(lambda x, y: x * y, temp_results[key][:n]), 1. / n)
+                result[key + '%d' % n] = np.power(reduce(lambda x, y: x * y, temp_results[key][:n]), 1. / n)
         return result
 
 

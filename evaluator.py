@@ -6,6 +6,7 @@ from metrics.cythonics.lib.self_bleu import SelfBleu
 
 from metrics.bert_distance import BertDistance
 from metrics.ms_jaccard import MSJaccard
+from metrics.multiset_distances import MultisetDistances
 from metrics.oracle.oracle_lstm import Oracle_LSTM
 from models import BaseModel
 from models import all_models, create_model
@@ -159,10 +160,7 @@ class RealWorldEvaluator(Evaluator):
             self.bleu4 = Bleu(test_tokens, weights=np.ones(4) / 4., other_instance=self.bleu5)
             self.bleu3 = Bleu(test_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
             self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
-            self.jaccard5 = MSJaccard(test_tokens, 5)
-            self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
-            self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
-            self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
+            self.multiset_distances = MultisetDistances(test_tokens, min_n=2, max_n=5)
 
             # self.fbd = FBD(self.test_data, 64, BERT_PATH)
             # self.embd = EMBD(self.test_data, 64, BERT_PATH)
@@ -211,8 +209,6 @@ class RealWorldEvaluator(Evaluator):
             subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
 
         self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
-        jaccard5_score, jaccard_cache = self.jaccard5.get_score(sample_tokens, return_cache=True)
-        fbd_embd_result = self.fbd_embd.get_score(sample_lines)
 
         scores_persample = {
             'bleu2': self.bleu2.get_score(sample_tokens),
@@ -229,14 +225,7 @@ class RealWorldEvaluator(Evaluator):
         scores_persample['sub_bleu3'] = list(np.array(scores_persample['bleu3'])[subsamples_mask])
         scores_persample['sub_bleu4'] = list(np.array(scores_persample['bleu4'])[subsamples_mask])
         scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
-        scores_mean = {
-            'jaccard5': jaccard5_score,
-            'jaccard4': self.jaccard4.get_score(sample_tokens, cache=jaccard_cache),
-            'jaccard3': self.jaccard3.get_score(sample_tokens, cache=jaccard_cache),
-            'jaccard2': self.jaccard2.get_score(sample_tokens, cache=jaccard_cache),
-            'fbd': fbd_embd_result['FBD'],
-            'embd': fbd_embd_result['EMBD']
-        }
+        scores_mean = {**self.fbd_embd.get_score(sample_lines), **self.multiset_distances.get_score(sample_tokens)}
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
         return scores_persample, scores_mean
@@ -263,10 +252,7 @@ class OracleEvaluator(Evaluator):
             self.bleu4 = Bleu(test_tokens, weights=np.ones(4) / 4., other_instance=self.bleu5)
             self.bleu3 = Bleu(test_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
             self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
-            self.jaccard5 = MSJaccard(test_tokens, 5)
-            self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
-            self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
-            self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
+            self.multiset_distances = MultisetDistances(test_tokens, min_n=2, max_n=5)
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':
@@ -307,22 +293,45 @@ class OracleEvaluator(Evaluator):
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
         from metrics.divergences import Bhattacharyya, Jeffreys
+        sample_lines = [r['text'] for r in samples_with_additional_fields]
+        sample_tokens = word_base_tokenize(sample_lines)
+
+        if self.selfbleu_n_sampling == -1:
+            subsampled_tokens = sample_tokens
+            subsamples_mask = [i for i in range(len(sample_tokens))]
+        else:
+            subsamples_mask = np.random.choice(range(len(sample_tokens)), self.selfbleu_n_sampling, replace=False)
+            subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
 
         lnqfromp = [r['lnq'] for r in refs_with_additional_fields]
         lnqfromq = [r['lnq'] for r in samples_with_additional_fields]
         lnpfromp = [r['lnp'] for r in refs_with_additional_fields]
         lnpfromq = [r['lnp'] for r in samples_with_additional_fields]
+        self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
 
         scores_persample = {
             'lnqfromp': lnqfromp,
             'lnqfromq': lnqfromq,
             'lnpfromp': lnpfromp,
-            'lnpfromq': lnpfromq
+            'lnpfromq': lnpfromq,
+            'bleu2': self.bleu2.get_score(sample_tokens),
+            'bleu3': self.bleu3.get_score(sample_tokens),
+            'bleu4': self.bleu4.get_score(sample_tokens),
+            'bleu5': self.bleu5.get_score(sample_tokens),
+            'self_bleu5': self_bleu5.get_score(),
+            'self_bleu4': SelfBleu(subsampled_tokens, weights=np.ones(4) / 4., other_instance=self_bleu5).get_score(),
+            'self_bleu3': SelfBleu(subsampled_tokens, weights=np.ones(3) / 3., other_instance=self_bleu5).get_score(),
+            'self_bleu2': SelfBleu(subsampled_tokens, weights=np.ones(2) / 2., other_instance=self_bleu5).get_score(),
         }
+        scores_persample['sub_bleu2'] = list(np.array(scores_persample['bleu2'])[subsamples_mask])
+        scores_persample['sub_bleu3'] = list(np.array(scores_persample['bleu3'])[subsamples_mask])
+        scores_persample['sub_bleu4'] = list(np.array(scores_persample['bleu4'])[subsamples_mask])
+        scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
         scores_mean = {
             'bhattacharyya': Bhattacharyya(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
             'jeffreys': Jeffreys(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
         }
+        scores_mean = {**scores_mean, **self.multiset_distances.get_score(sample_tokens)}
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
         return scores_persample, scores_mean
