@@ -83,7 +83,7 @@ class BaseModel:
         pass
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, with_beam_search=False):
+    def generate_samples(self, n_samples, temperature=None):
         pass
 
     @data2tempfile_decorator
@@ -155,7 +155,7 @@ class TexyGen(BaseModel):
         self.tracker.update_scores(last_iter=True)
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, with_beam_search=False):
+    def generate_samples(self, n_samples, temperature=None):
         if self.model.__class__.__name__ == 'Leakgan':
             from previous_works.texygen.models.leakgan import Leakgan
             codes = Leakgan.generate_samples_gen(self.model.sess, self.model.generator, self.model.batch_size,
@@ -163,7 +163,8 @@ class TexyGen(BaseModel):
         else:
             from previous_works.texygen.utils.utils import generate_samples
             codes = generate_samples(self.model.sess, self.model.generator,
-                                     self.model.batch_size, n_samples, self.model.test_file)
+                                     self.model.batch_size, n_samples, self.model.test_file,
+                                     temperature)
         return codes
 
     def init_nll(self, data_loc):
@@ -234,7 +235,7 @@ class LeakGan(BaseModel):
         self.tracker.update_scores(last_iter=True)
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, with_beam_search=False):
+    def generate_samples(self, n_samples, temperature=None):
         codes = self.model.generate_samples(n_samples, self.model_module.dummy_file, 0)
         return codes
 
@@ -276,18 +277,20 @@ class TextGan(BaseModel):
         super().__init__(parser)
 
     def create_model(self):
-        from previous_works.textgan2.textGAN import TextGANMMD
-        self.model = TextGANMMD(self, self.parser)
+        pass
 
     def set_train_val_data(self, train_data, valid_data):
         super().set_train_val_data(train_data, valid_data)
 
     def train(self):
-        self.model.train_func(self.train_data, self.valid_data)
-        self.tracker.update_scores(last_iter=True)
+        from previous_works.textgan2.textGAN import train_model
+        train_model(self.train_data, self.valid_data, self.valid_data,None, None, None, self.parser.id2vocab,
+                    self.parser.vocab.shape[0], self.parser.END_TOKEN_ID)
+        # self.model.train_func(self.train_data, self.valid_data)
+        # self.tracker.update_scores(last_iter=True)
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, with_beam_search=False):
+    def generate_samples(self, n_samples, temperature=None):
         codes = self.model.generate()
         return codes
 

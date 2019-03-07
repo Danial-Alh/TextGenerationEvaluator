@@ -16,13 +16,14 @@ from utils.path_configs import MODEL_PATH, EXPORT_PATH, BERT_PATH
 
 
 class Evaluator:
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, temperature=None, dm_name=''):
         # in train and gen mode, data is coded but in eval mode data is raw
         self.parser = parser
         self.train_data = train_data
         self.valid_data = valid_data
         self.test_data = test_data
         self.k = k
+        self.temperature = temperature
         self.dm_name = dm_name
         self.during_training_n_sampling = 5000
         self.test_n_sampling = test_n_sampling
@@ -57,7 +58,7 @@ class Evaluator:
             model = tracker.model
             dumper.restore_model(restore_type)
 
-            sample_codes = model.generate_samples(self.test_n_sampling)
+            sample_codes = model.generate_samples(self.test_n_sampling, self.temperature)
             additional_fields = self.get_sample_additional_fields(model, sample_codes,
                                                                   self.test_data, restore_type)
 
@@ -77,10 +78,10 @@ class Evaluator:
 
             dumper.dump_samples_with_additional_fields(sample_lines,
                                                        additional_fields['gen'],
-                                                       restore_type, 'gen')
+                                                       restore_type, 'gen', self.temperature)
             dumper.dump_samples_with_additional_fields(test_lines,
                                                        additional_fields['test'],
-                                                       restore_type, 'test')
+                                                       restore_type, 'test', self.temperature)
             model.delete()
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
@@ -100,14 +101,15 @@ class Evaluator:
             print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
             m = create_model(model_name, None)
             dumper = Dumper(m, self.k, self.dm_name)
-            refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'test')
+            refs_with_additional_fields = dumper.load_samples_with_additional_fields(restore_type, 'test',
+                                                                                     self.temperature)
             samples_with_additional_fields = \
-                dumper.load_samples_with_additional_fields(restore_type, 'gen')
+                dumper.load_samples_with_additional_fields(restore_type, 'gen', self.temperature)
 
             scores_persample, scores = self.get_test_scores(refs_with_additional_fields,
                                                             samples_with_additional_fields)
-            dumper.dump_final_results(scores, restore_type)
-            dumper.dump_final_results_details(scores_persample, restore_type)
+            dumper.dump_final_results(scores, restore_type, self.temperature)
+            dumper.dump_final_results_details(scores_persample, restore_type, self.temperature)
 
     def eval_pre_check(self, model_restore_zip):
         # if restore_types is None:
@@ -131,7 +133,8 @@ class Evaluator:
         A = set(refs)
         B = set(self.test_data)
         inter = len(A.intersection(B))
-        print('{}% --- {}/({},{}) intersection,{}/{} {}/{} diff'.format(inter*100/float(len(A)), inter, len(A), len(B),
+        print('{}% --- {}/({},{}) intersection,{}/{} {}/{} diff'.format(inter * 100 / float(len(A)), inter, len(A),
+                                                                        len(B),
                                                                         len(A) - inter, len(A), len(B) - inter, len(B)))
         return A == B
 
@@ -139,8 +142,8 @@ class Evaluator:
 class RealWorldEvaluator(Evaluator):
     test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
 
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
-        super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, temperature=None, dm_name=''):
+        super().__init__(train_data, valid_data, test_data, parser, mode, k, temperature, dm_name)
         self.selfbleu_n_sampling = selfbleu_n_s
 
     def init_metrics(self, mode):
@@ -242,14 +245,28 @@ class RealWorldEvaluator(Evaluator):
 class OracleEvaluator(Evaluator):
     test_restore_types = ['-nll_oracle', 'last_iter']
 
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, dm_name=''):
-        super().__init__(train_data, valid_data, test_data, parser, mode, k, dm_name)
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, temperature=None, dm_name=''):
+        super().__init__(train_data, valid_data, test_data, parser, mode, k, temperature, dm_name)
+        self.selfbleu_n_sampling = selfbleu_n_s
 
     def init_metrics(self, mode):
         if mode == 'train':
             self.oracle = Oracle_LSTM()
-        elif mode == 'test':
-            self.oracle = Oracle_LSTM()
+            print(len(self.train_data), len(self.valid_data))
+            valid_tokens = word_base_tokenize(self.parser.id_format2line(self.valid_data))
+            self.bleu5 = Bleu(valid_tokens, weights=np.ones(5) / 5.)
+            self.bleu4 = Bleu(valid_tokens, weights=np.ones(4) / 4., other_instance=self.bleu5)
+            self.bleu3 = Bleu(valid_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
+        elif mode == 'eval':
+            test_tokens = word_base_tokenize(self.test_data)
+            self.bleu5 = Bleu(test_tokens, weights=np.ones(5) / 5.)
+            self.bleu4 = Bleu(test_tokens, weights=np.ones(4) / 4., other_instance=self.bleu5)
+            self.bleu3 = Bleu(test_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
+            self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
+            self.jaccard5 = MSJaccard(test_tokens, 5)
+            self.jaccard4 = MSJaccard(test_tokens, 4, cached_fields=self.jaccard5.get_cached_fields())
+            self.jaccard3 = MSJaccard(test_tokens, 3, cached_fields=self.jaccard5.get_cached_fields())
+            self.jaccard2 = MSJaccard(test_tokens, 2, cached_fields=self.jaccard5.get_cached_fields())
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':
@@ -259,13 +276,20 @@ class OracleEvaluator(Evaluator):
 
     def get_initial_scores_during_training(self):
         return {
+            'bleu3': [{"value": 0.0, "epoch": -1}],
+            'bleu4': [{"value": 0.0, "epoch": -1}],
+            'bleu5': [{"value": 0.0, "epoch": -1}],
             '-nll_oracle': [{"value": -np.inf, "epoch": -1}],
             '-nll': [{"value": -np.inf, "epoch": -1}]
         }
 
     def get_during_training_scores(self, model: BaseModel):
         new_samples = model.generate_samples(self.during_training_n_sampling)
+        samples = self.parser.id_format2line(new_samples, merge=False)
         new_scores = {
+            'bleu3': np.mean(self.bleu3.get_score(samples)),
+            'bleu4': np.mean(self.bleu4.get_score(samples)),
+            'bleu5': np.mean(self.bleu5.get_score(samples)),
             '-nll_oracle': np.mean(self.oracle.log_probability(new_samples)),
             '-nll': -model.get_nll()
         }
@@ -329,42 +353,48 @@ class Dumper:
         print('K%d - "%s" based "%s" saved model restored' % (self.k, key, self.model.get_name()))
         self.model.load()
 
-    def dump_generated_samples(self, samples, load_key):
+    def dump_generated_samples(self, samples, load_key, temperature):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
+        write_text(samples, os.path.join(self.saving_path, temperature + '_' +
+                                         load_key + '_based_samples.txt'), is_complete_path=True)
 
-    def load_generated_samples(self, load_key):
-        return read_text(os.path.join(self.saving_path, load_key + '_based_samples.txt'), is_complete_path=True)
+    def load_generated_samples(self, load_key, temperature):
+        return read_text(os.path.join(self.saving_path, temperature + '_' +
+                                      load_key + '_based_samples.txt'), is_complete_path=True)
 
-    def get_generated_samples_path(self, load_key):
-        return os.path.join(self.saving_path, load_key + '_based_samples.txt')
+    def get_generated_samples_path(self, load_key, temperature):
+        return os.path.join(self.saving_path, temperature + '_' +
+                            load_key + '_based_samples.txt')
 
     def dump_best_history(self, best_history):
         dump_json(best_history, 'best_history', self.saving_path)
 
-    def dump_samples_with_additional_fields(self, samples, additional_fields: dict, load_key, sample_label):
+    def dump_samples_with_additional_fields(self, samples, additional_fields: dict, load_key, sample_label,
+                                            temperature):
         dump_json([
             {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
-            sample_label + '_' + load_key + '_based_samples', self.saving_path)
+            sample_label + '_' + temperature + '_' + load_key + '_based_samples', self.saving_path)
 
-    def load_samples_with_additional_fields(self, load_key, sample_label):
-        result = load_json(sample_label + '_' + load_key + '_based_samples', self.saving_path)
+    def load_samples_with_additional_fields(self, load_key, sample_label, temperature):
+        result = load_json(sample_label + '_' + temperature + '_' + load_key + '_based_samples', self.saving_path)
         return result
 
-    def dump_final_results(self, results, restore_type):
-        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore', self.final_result_parent_path)
+    def dump_final_results(self, results, restore_type, temperature):
+        dump_json(results, self.final_result_file_name + '_' + temperature +
+                  '_' + restore_type + 'restore', self.final_result_parent_path)
 
-    def load_final_results(self, restore_type):
-        return load_json(self.final_result_file_name + '_' + restore_type + 'restore', self.final_result_parent_path)
+    def load_final_results(self, restore_type, temperature):
+        return load_json(self.final_result_file_name + '_' + temperature +
+                         '_' + restore_type + 'restore', self.final_result_parent_path)
 
-    def dump_final_results_details(self, results, restore_type):
-        dump_json(results, self.final_result_file_name + '_' + restore_type + 'restore_details',
+    def dump_final_results_details(self, results, restore_type, temperature):
+        dump_json(results, self.final_result_file_name + '_' + temperature + '_' + restore_type + 'restore_details',
                   self.final_result_parent_path)
 
-    def load_final_results_details(self, restore_type):
-        return load_json(self.final_result_file_name + '_' + restore_type + 'restore_details',
+    def load_final_results_details(self, restore_type, temperature):
+        return load_json(self.final_result_file_name + '_' + temperature + '_' + restore_type + 'restore_details',
                          self.final_result_parent_path)
 
 
@@ -458,5 +488,10 @@ def update_config(dm_name):
         selfbleu_n_s = -1
         test_n_sampling = 2000
         BERT_PATH = CH_BERT_PATH
+    elif dm_name.startswith('oracle'):
+        k_fold = 3
+        # max_l = 26
+        selfbleu_n_s = 5000
+        test_n_sampling = 25000
     else:
         raise BaseException('dm_name {} is invalid!'.format(dm_name))

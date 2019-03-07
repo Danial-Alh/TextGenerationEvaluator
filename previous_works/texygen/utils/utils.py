@@ -10,12 +10,16 @@ from tqdm import tqdm
 from ..utils.text_process import get_tokenlized
 
 
-def generate_samples(sess, trainable_model, batch_size, generated_num, output_file=None, get_code=True):
+def generate_samples(sess, trainable_model, batch_size, generated_num, output_file=None, get_code=True,
+                     temperature=None):
     # Generate Samples
     generated_samples = []
-    for _ in range(int(generated_num / batch_size)):
-        sample = trainable_model.generate(sess)
+    gen_func = trainable_model.generate if temperature is None else \
+        (lambda s: trainable_model.temperature_generate(s, temperature))
+    for _ in range(int(generated_num / batch_size) + 1):
+        sample = gen_func(sess)
         generated_samples.extend(sample)
+    generated_samples = generated_samples[:generated_num]
     codes = list()
     if output_file is not None:
         with open(output_file, 'w') as fout:

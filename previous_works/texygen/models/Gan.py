@@ -1,6 +1,7 @@
 from abc import abstractmethod
 
 import tensorflow as tf
+from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 
 from ..utils.utils import init_sess, generate_samples
 
@@ -117,6 +118,39 @@ class Gan:
         print('samples generated!')
         from ..utils.text_process import code_to_text
         code_to_text(codes, index_word_dict, self.test_file)
+
+
+class GeneralGenerator(object):
+    def __init__(self):
+        t_gen_o = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length,
+                                             dynamic_size=False, infer_shape=True)
+        t_gen_x = tensor_array_ops.TensorArray(dtype=tf.int32, size=self.sequence_length,
+                                             dynamic_size=False, infer_shape=True)
+        self.temperature = tf.placeholder(tf.float32)
+
+        def _temperature_g_recurrence(i, x_t, h_tm1, gen_o, gen_x):
+            h_t = self.g_recurrent_unit(x_t, h_tm1)  # hidden_memory_tuple
+            o_t = self.g_output_unit(h_t)  # batch x vocab , logits not prob
+            o_t *= self.temperature
+            next_token = tf.cast(tf.reshape(tf.multinomial(o_t, 1), [self.batch_size]), tf.int32)
+            x_tp1 = tf.nn.embedding_lookup(self.g_embeddings, next_token)  # batch x emb_dim
+            gen_o = gen_o.write(i, tf.reduce_sum(tf.multiply(tf.one_hot(next_token, self.num_vocabulary, 1.0, 0.0),
+                                                             tf.nn.softmax(o_t)), 1))  # [batch_size] , prob
+            gen_x = gen_x.write(i, next_token)  # indices, batch_size
+            return i + 1, x_tp1, h_t, gen_o, gen_x
+
+        _, _, _, self.gen_o, self.gen_x = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, _3, _4: i < self.sequence_length,
+            body=_temperature_g_recurrence,
+            loop_vars=(tf.constant(0, dtype=tf.int32),
+                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token), self.h0, t_gen_o, t_gen_x))
+
+        self.temp_gen_x = self.gen_x.stack()  # seq_length x batch_size
+        self.temp_gen_x = tf.transpose(self.gen_x, perm=[1, 0])  # batch_size x seq_length
+
+    def temperature_generate(self, sess, temperature):
+        outputs = sess.run(self.temp_gen_x, {self.temperature: temperature})
+        return outputs
 
 
 class SavableModel(object):

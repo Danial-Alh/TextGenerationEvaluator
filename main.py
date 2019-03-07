@@ -41,18 +41,21 @@ parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate
                                                                                              'export', 'dump'],
                     required=True)
 parser.add_argument('-k', type=int, help='which fold to action be done on', nargs='+')
+parser.add_argument('-t', '--temperatures', type=float, help='softmax temperatures', nargs='+')
 parser.add_argument('-m', '--models', type=str, help='model names', nargs='+', choices=all_models)
 parser.add_argument('-r', '--restore', type=str, help='restore types', nargs='+')
 args = parser.parse_args()
-
 
 if args.restore is not None:
     args.restore = [r if r != 'nll' else '-nll' for r in args.restore]
     model_restore_zip = dict(zip(args.models, args.restore))
     print(model_restore_zip)
+if args.temperatures is None:
+    args.temperatures = [None]
 
 dataset_prefix_name = args.data.split('-')[0]
 from evaluator import update_config
+
 update_config(dataset_prefix_name)
 from evaluator import k_fold
 
@@ -67,6 +70,7 @@ print(args.models)
 
 if args.k is not None:
     from evaluator import k_fold
+
     assert not (True in [k >= k_fold for k in args.k])
 
 if args.action == 'train':
@@ -92,12 +96,12 @@ elif args.action == 'gen':
     parser = ParserClass(name=dataset_prefix_name + '-words')
     test_data_loader = SentenceDataloader(dataset_prefix_name + '-test')
     ts = parser.line2id_format(test_data_loader.get_data())
-    for k in args.k:
-        print('sample generation from K{}'.format(k))
-        ev = EvaluatorClass(None, None, ts, parser, args.action, k, dataset_prefix_name)
-
-        # ev.generate_samples(args.models, args.restore)
-        ev.generate_samples(model_restore_zip)
+    for temperature in args.temperatures:
+        for k in args.k:
+            print('sample generation from K{}, temperature: {}'.format(k, temperature))
+            ev = EvaluatorClass(None, None, ts, parser, args.action, k, temperature, dataset_prefix_name)
+            # ev.generate_samples(args.models, args.restore)
+            ev.generate_samples(model_restore_zip)
 elif args.action.startswith('eval'):
     assert args.k is not None
     m_name = args.models[0] if args.models is not None else all_models[0]
@@ -107,30 +111,33 @@ elif args.action.startswith('eval'):
     test_data_loader = SentenceDataloader(dataset_prefix_name + '-test')
     # ts = parser.line2id_format(test_data_loader.get_data())
     ts = test_data_loader.get_data()
-    for k in args.k:
-        print('********************* evaluating K{} *********************'.format(k))
-        m = create_model(m_name, None)
-        dmp = Dumper(m, k, dataset_prefix_name)
-        # ts = [r['text'] for r in dmp.load_samples_with_additional_fields(restore_type, 'test')]
+    for temperature in args.temperatures:
+        for k in args.k:
+            print('********************* evaluating K{}, temperature: {} *********************'.format(k,
+                                                                                                       temperature))
+            m = create_model(m_name, None)
+            dmp = Dumper(m, k, dataset_prefix_name)
+            # ts = [r['text'] for r in dmp.load_samples_with_additional_fields(restore_type, 'test')]
 
-        # write_text([r['text'] for r in dmp.load_samples_with_additional_fields(args.restore[0], 'test')], 't')
-        # write_text([r['text'] for r in dmp.load_samples_with_additional_fields(args.restore[0], 'gen')], 'g')
-        # exit(0)
+            # write_text([r['text'] for r in dmp.load_samples_with_additional_fields(args.restore[0], 'test')], 't')
+            # write_text([r['text'] for r in dmp.load_samples_with_additional_fields(args.restore[0], 'gen')], 'g')
+            # exit(0)
 
-        # ts = test_data_loader.get_data()[:1000]
-        # from utils.file_handler import read_text
-        # ts = read_text('{}-valid-k{}_parsed'.format(dataset_prefix_name, k), False)
-        # EvaluatorClass(None, None, ts, None, 'eval_precheck', k, dataset_prefix_name).eval_pre_check(model_restore_zip)
-        ev = EvaluatorClass(None, None, ts, None, args.action, k, dataset_prefix_name)
-        if args.action == 'eval':
-            # ev.final_evaluate(args.models, args.restore)
-            ev.final_evaluate(model_restore_zip)
+            # ts = test_data_loader.get_data()[:1000]
+            # from utils.file_handler import read_text
+            # ts = read_text('{}-valid-k{}_parsed'.format(dataset_prefix_name, k), False)
+            # EvaluatorClass(None, None, ts, None, 'eval_precheck', k, dataset_prefix_name).eval_pre_check(model_restore_zip)
+            ev = EvaluatorClass(None, None, ts, None, args.action, k, temperature, dataset_prefix_name)
+            if args.action == 'eval':
+                # ev.final_evaluate(args.models, args.restore)
+                ev.final_evaluate(model_restore_zip)
 elif args.action == 'legacy':
     assert args.k is not None
     convert_legacies()
 elif args.action == 'export':
     from export_utils.evaluation_exporter import export_tables
     from export_utils.histogram_exporter import export_histogram
+
     export_tables(args.mode, dataset_prefix_name, model_restore_zip)
     for k in args.k:
         export_histogram(args.mode, dataset_prefix_name, model_restore_zip, k)
