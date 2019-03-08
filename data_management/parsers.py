@@ -187,7 +187,7 @@ class OracleBasedParser(Parser):
         if self.max_length is None:
             self.max_length = example_l
         else:
-            assert self.max_length <= example_l
+            assert self.max_length <= example_l, 'max_l: {}, lines_l: {}'.format(self.max_length, example_l)
 
     def _create_vocab(self, lines):
         vocab_counter = Counter()
@@ -213,10 +213,11 @@ class OracleBasedParser(Parser):
                 vocabs = self._split_lines(line)[::-1] if reverse else self._split_lines(line)
             else:
                 vocabs = line[::-1] if reverse else line
-            assert self.max_length == len(vocabs), 'line should satisfy max len!'
+            assert self.max_length == len(vocabs), 'line should satisfy max len! max_len: {}, line_len: {}'.\
+                format(self.max_length, len(vocabs))
             return [self.vocab2id[v] for v in vocabs], self.max_length
 
-        if isinstance(lines, str) or isinstance(lines[0], str):
+        if isinstance(lines, str):
             id_formatted, lengths = convert(lines)
         else:
             id_formatted = []
