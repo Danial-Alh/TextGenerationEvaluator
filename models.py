@@ -17,7 +17,7 @@ def empty_sentence_remover_decorator(func):
 
 
 def data2tempfile_decorator(func):
-    def wrapper(self, samples=None, samples_loc=None):
+    def wrapper(self, temperature, samples=None, samples_loc=None):
         assert not (samples is None and samples_loc is not None)
         file_to_be_deleted = None
         if samples is None:
@@ -26,7 +26,7 @@ def data2tempfile_decorator(func):
             stringified_samples = [' '.join(list(map(str, s))) for s in samples]
             samples_loc = write_text(stringified_samples, self.get_name() + '_{}'.format(func.__name__), TEMP_PATH)
             file_to_be_deleted = samples_loc
-        result = func(self, samples, samples_loc)
+        result = func(self, temperature, samples, samples_loc)
         if file_to_be_deleted is not None:
             delete_file(file_to_be_deleted)
         return result
@@ -83,15 +83,15 @@ class BaseModel:
         pass
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, temperature=None):
+    def generate_samples(self, n_samples, temperature):
         pass
 
     @data2tempfile_decorator
-    def get_nll(self, samples=None, samples_loc=None):
+    def get_nll(self, temperature, samples=None, samples_loc=None):
         pass
 
     @data2tempfile_decorator
-    def get_persample_ll(self, samples=None, samples_loc=None):
+    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
         pass
 
     def delete(self):
@@ -155,7 +155,7 @@ class TexyGen(BaseModel):
         self.tracker.update_scores(last_iter=True)
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, temperature=None):
+    def generate_samples(self, n_samples, temperature):
         if self.model.__class__.__name__ == 'Leakgan':
             from previous_works.texygen.models.leakgan import Leakgan
             codes = Leakgan.generate_samples_gen(self.model.sess, self.model.generator, self.model.batch_size,
@@ -164,40 +164,42 @@ class TexyGen(BaseModel):
             from previous_works.texygen.utils.utils import generate_samples
             codes = generate_samples(self.model.sess, self.model.generator,
                                      self.model.batch_size, n_samples, self.model.test_file,
-                                     temperature)
+                                     temperature=temperature)
         return codes
 
-    def init_nll(self, data_loc):
+    def init_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.Nll import Nll
         valid_dataloader = self.dataloader_class(batch_size=self.model.batch_size,
                                                  seq_length=self.model.sequence_length)
         valid_dataloader.create_batches(data_loc)
 
-        inll = Nll(data_loader=valid_dataloader, rnn=self.model.generator, sess=self.model.sess)
+        inll = Nll(data_loader=valid_dataloader, rnn=self.model.generator, sess=self.model.sess,
+                   temperature=temperature)
         inll.set_name('nll-test-' + data_loc)
         return inll
 
-    def init_persample_ll(self, data_loc):
+    def init_persample_ll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.ItemFetcher import ItemFetcher
         dataloader = self.dataloader_class(batch_size=self.model.batch_size,
                                            seq_length=self.model.sequence_length)
         dataloader.create_batches(data_loc)
 
         inll = ItemFetcher(data_loader=dataloader, rnn=self.model.generator,
-                           item_to_be_fetched=self.model.generator.selfdefined_persample_ll,
-                           sess=self.model.sess)
+                           item_to_be_fetched=self.model.generator.selfdefined_persample_ll if temperature is None
+                           else self.model.generator.selfdefined_temp_persample_ll,
+                           sess=self.model.sess, temperature=temperature)
         inll.set_name('persample_ll' + data_loc)
         return inll
 
     @data2tempfile_decorator
-    def get_nll(self, samples=None, samples_loc=None):
-        inll = self.init_nll(samples_loc)
+    def get_nll(self, temperature, samples=None, samples_loc=None):
+        inll = self.init_nll(samples_loc, temperature)
         score = inll.get_score()
         return float(score)
 
     @data2tempfile_decorator
-    def get_persample_ll(self, samples=None, samples_loc=None):
-        ll = self.init_persample_ll(samples_loc)
+    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
+        ll = self.init_persample_ll(samples_loc, temperature)
         score = ll.get_score()
         return [float(s) for s in score]
 
@@ -235,19 +237,19 @@ class LeakGan(BaseModel):
         self.tracker.update_scores(last_iter=True)
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, temperature=None):
+    def generate_samples(self, n_samples, temperature):
         codes = self.model.generate_samples(n_samples, self.model_module.dummy_file, 0)
         return codes
 
     @data2tempfile_decorator
-    def get_nll(self, samples=None, samples_loc=None):
+    def get_nll(self, temperature, samples=None, samples_loc=None):
         dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
         dl.create_batches(samples_loc)
         score = self.model.target_loss(dl)
         return float(score)
 
     @data2tempfile_decorator
-    def get_persample_ll(self, samples=None, samples_loc=None):
+    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
         dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
         dl.create_batches(samples_loc)
         score = self.model.per_sample_ll(dl)
@@ -284,22 +286,22 @@ class TextGan(BaseModel):
 
     def train(self):
         from previous_works.textgan2.textGAN import train_model
-        train_model(self.train_data, self.valid_data, self.valid_data,None, None, None, self.parser.id2vocab,
+        train_model(self.train_data, self.valid_data, self.valid_data, None, None, None, self.parser.id2vocab,
                     self.parser.vocab.shape[0], self.parser.END_TOKEN_ID)
         # self.model.train_func(self.train_data, self.valid_data)
         # self.tracker.update_scores(last_iter=True)
 
     @empty_sentence_remover_decorator
-    def generate_samples(self, n_samples, temperature=None):
+    def generate_samples(self, n_samples, temperature):
         codes = self.model.generate()
         return codes
 
     @data2tempfile_decorator
-    def get_nll(self, samples=None, samples_loc=None):
+    def get_nll(self, temperature, samples=None, samples_loc=None):
         return 0.0
 
     @data2tempfile_decorator
-    def get_persample_ll(self, samples=None, samples_loc=None):
+    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
         pass
 
     def get_saving_path(self):

@@ -7,4 +7,4 @@ class NLL:
         self.data_loc = data_loc
 
     def get_score(self):
-        self.model.get_nll(self.data_loc)
+        self.model.get_nll(aaaaa, self.data_loc)

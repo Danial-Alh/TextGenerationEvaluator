@@ -58,7 +58,6 @@ class Evaluator:
             dumper = tracker.dumper
             model = tracker.model
             dumper.restore_model(restore_type)
-
             sample_codes = model.generate_samples(self.test_n_sampling, self.temperature)
             additional_fields = self.get_sample_additional_fields(model, sample_codes,
                                                                   self.test_data, restore_type)
@@ -188,13 +187,13 @@ class RealWorldEvaluator(Evaluator):
             'bleu3': np.mean(self.bleu3.get_score(samples)),
             'bleu4': np.mean(self.bleu4.get_score(samples)),
             'bleu5': np.mean(self.bleu5.get_score(samples)),
-            '-nll': -model.get_nll()
+            '-nll': -model.get_nll(self.temperature)
         }
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
-        lnqfromp = model.get_persample_ll(test_codes)
-        lnqfromq = model.get_persample_ll(sample_codes)
+        lnqfromp = model.get_persample_ll(self.temperature, test_codes)
+        lnqfromq = model.get_persample_ll(self.temperature, sample_codes)
         return {'gen': {'lnq': lnqfromq}, 'test': {'lnq': lnqfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
@@ -279,15 +278,15 @@ class OracleEvaluator(Evaluator):
             'bleu4': np.mean(self.bleu4.get_score(samples)),
             'bleu5': np.mean(self.bleu5.get_score(samples)),
             '-nll_oracle': np.mean(self.oracle.log_probability(new_samples)),
-            '-nll': -model.get_nll()
+            '-nll': -model.get_nll(self.temperature)
         }
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
         test_lines = self.parser.id_format2line(test_codes)
         sample_lines = self.parser.id_format2line(sample_codes)
-        lnqfromp = model.get_persample_ll(test_codes)
-        lnqfromq = model.get_persample_ll(sample_codes)
+        lnqfromp = model.get_persample_ll(self.temperature, test_codes)
+        lnqfromq = model.get_persample_ll(self.temperature, sample_codes)
         lnpfromp = self.oracle.log_probability(test_lines)
         lnpfromq = self.oracle.log_probability(sample_lines)
         return {'gen': {'lnq': lnqfromq, 'lnp': lnpfromq},
@@ -369,15 +368,15 @@ class Dumper:
     def dump_generated_samples(self, samples, load_key, temperature):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, format(temperature, '.1f') + '_' +
+        write_text(samples, os.path.join(self.saving_path, get_temperature_strigified(temperature) + '_' +
                                          load_key + '_based_samples.txt'), is_complete_path=True)
 
     def load_generated_samples(self, load_key, temperature):
-        return read_text(os.path.join(self.saving_path, format(temperature, '.1f') + '_' +
+        return read_text(os.path.join(self.saving_path, get_temperature_strigified(temperature) + '_' +
                                       load_key + '_based_samples.txt'), is_complete_path=True)
 
     def get_generated_samples_path(self, load_key, temperature):
-        return os.path.join(self.saving_path, format(temperature, '.1f') + '_' +
+        return os.path.join(self.saving_path, get_temperature_strigified(temperature) + '_' +
                             load_key + '_based_samples.txt')
 
     def dump_best_history(self, best_history):
@@ -388,26 +387,31 @@ class Dumper:
         dump_json([
             {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
-            sample_label + '_' + format(temperature, '.1f') + '_' + load_key + '_based_samples', self.saving_path)
+            sample_label + get_temperature_strigified(temperature) + '_' + load_key + '_based_samples',
+            self.saving_path)
 
     def load_samples_with_additional_fields(self, load_key, sample_label, temperature):
-        result = load_json(sample_label + '_' + format(temperature, '.1f') + '_' + load_key + '_based_samples', self.saving_path)
+        result = load_json(
+            sample_label + get_temperature_strigified(temperature) + '_' + load_key + '_based_samples',
+            self.saving_path)
         return result
 
     def dump_final_results(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + '_' + format(temperature, '.1f') +
+        dump_json(results, self.final_result_file_name + get_temperature_strigified(temperature) +
                   '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def load_final_results(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + '_' + format(temperature, '.1f') +
+        return load_json(self.final_result_file_name + get_temperature_strigified(temperature) +
                          '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def dump_final_results_details(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + '_' + format(temperature, '.1f') + '_' + restore_type + 'restore_details',
+        dump_json(results, self.final_result_file_name + get_temperature_strigified(temperature)
+                  + '_' + restore_type + 'restore_details',
                   self.final_result_parent_path)
 
     def load_final_results_details(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + '_' + format(temperature, '.1f') + '_' + restore_type + 'restore_details',
+        return load_json(self.final_result_file_name + get_temperature_strigified(temperature)
+                         + '_' + restore_type + 'restore_details',
                          self.final_result_parent_path)
 
 
@@ -464,6 +468,12 @@ class BestModelTracker:
 # selfbleu_n_s = -1
 # test_n_s = 2000
 max_l, test_n_sampling, k_fold, selfbleu_n_s = 0, 0, 0, 0
+
+
+def get_temperature_strigified(temperature):
+    if temperature is None:
+        return ''
+    return '_' + format(temperature, '0.6f')
 
 
 def update_config(dm_name):

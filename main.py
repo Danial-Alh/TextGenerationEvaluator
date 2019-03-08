@@ -71,7 +71,6 @@ print(args.models)
 
 if args.k is not None:
     from evaluator import k_fold
-
     assert not (True in [k >= k_fold for k in args.k])
 
 if args.action == 'train':
@@ -113,12 +112,14 @@ elif args.action.startswith('eval'):
     test_data_loader = SentenceDataloader(dataset_prefix_name + '-test')
     # ts = parser.line2id_format(test_data_loader.get_data())
     ts = test_data_loader.get_data()
-    for temperature in args.temperatures:
-        for k in args.k:
+    for k in args.k:
+        # m = create_model(m_name, None)
+        ev = EvaluatorClass(None, None, ts, None, args.action, k, None, dataset_prefix_name)
+        # dmp = Dumper(m, k, dataset_prefix_name)
+        for temperature in args.temperatures:
             print('********************* evaluating K{}, temperature: {} *********************'.
                   format(k, temperature))
-            m = create_model(m_name, None)
-            dmp = Dumper(m, k, dataset_prefix_name)
+            ev.temperature = temperature
             # ts = [r['text'] for r in dmp.load_samples_with_additional_fields(restore_type, 'test')]
 
             # write_text([r['text'] for r in dmp.load_samples_with_additional_fields(args.restore[0], 'test')], 't')
@@ -129,7 +130,6 @@ elif args.action.startswith('eval'):
             # from utils.file_handler import read_text
             # ts = read_text('{}-valid-k{}_parsed'.format(dataset_prefix_name, k), False)
             # EvaluatorClass(None, None, ts, None, 'eval_precheck', k, dataset_prefix_name).eval_pre_check(model_restore_zip)
-            ev = EvaluatorClass(None, None, ts, None, args.action, k, temperature, dataset_prefix_name)
             if args.action == 'eval':
                 # ev.final_evaluate(args.models, args.restore)
                 ev.final_evaluate(model_restore_zip)

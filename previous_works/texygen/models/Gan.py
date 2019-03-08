@@ -123,9 +123,9 @@ class Gan:
 class GeneralGenerator(object):
     def __init__(self):
         t_gen_o = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length,
-                                             dynamic_size=False, infer_shape=True)
+                                               dynamic_size=False, infer_shape=True)
         t_gen_x = tensor_array_ops.TensorArray(dtype=tf.int32, size=self.sequence_length,
-                                             dynamic_size=False, infer_shape=True)
+                                               dynamic_size=False, infer_shape=True)
         self.temperature = tf.placeholder(tf.float32)
 
         def _temperature_g_recurrence(i, x_t, h_tm1, gen_o, gen_x):
@@ -147,6 +147,49 @@ class GeneralGenerator(object):
 
         self.temp_gen_x = self.temp_gen_x.stack()  # seq_length x batch_size
         self.temp_gen_x = tf.transpose(self.temp_gen_x, perm=[1, 0])  # batch_size x seq_length
+
+        ####################################################################
+
+        g_predictions = tensor_array_ops.TensorArray(
+            dtype=tf.float32, size=self.sequence_length,
+            dynamic_size=False, infer_shape=True)
+
+        ta_emb_x = tensor_array_ops.TensorArray(
+            dtype=tf.float32, size=self.sequence_length)
+        ta_emb_x = ta_emb_x.unstack(self.processed_x)
+
+        def _pretrain_recurrence(i, x_t, h_tm1, g_predictions):
+            h_t = self.g_recurrent_unit(x_t, h_tm1)
+            o_t = self.g_output_unit(h_t)
+            o_t *= self.temperature
+            g_predictions = g_predictions.write(i, tf.nn.softmax(o_t))  # batch x vocab_size
+            x_tp1 = ta_emb_x.read(i)
+            return i + 1, x_tp1, h_t, g_predictions
+
+        _, _, _, self.temp_g_predictions = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, _3: i < self.sequence_length,
+            body=_pretrain_recurrence,
+            loop_vars=(tf.constant(0, dtype=tf.int32),
+                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token),
+                       self.h0, g_predictions))
+
+        self.temp_g_predictions = tf.transpose(self.temp_g_predictions.stack(),
+                                          perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
+
+        self.temp_pretrain_loss = -tf.reduce_sum(
+            tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
+                tf.clip_by_value(tf.reshape(self.temp_g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
+            )
+        ) / (self.sequence_length * self.batch_size)
+
+        self.selfdefined_temp_persample_len_ll = \
+            tf.reshape(
+                tf.reduce_sum(
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * \
+                    tf.log(tf.clip_by_value(tf.reshape(self.temp_g_predictions, [-1, self.num_vocabulary]),
+                                            1e-20, 1.0)),
+                    axis=-1), self.x.shape)
+        self.selfdefined_temp_persample_ll = tf.reduce_sum(self.selfdefined_temp_persample_len_ll, axis=-1)
 
     def temperature_generate(self, sess, temperature):
         outputs = sess.run(self.temp_gen_x, {self.temperature: temperature})
