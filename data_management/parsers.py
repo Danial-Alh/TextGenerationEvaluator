@@ -141,6 +141,7 @@ class Parser(PersistentClass):
     def __str__(self):
         return '{} parser, vocab size: {}, max len: {}'.format(self.name, self.vocab.shape[0], self.max_length)
 
+
 class CharacterBasedParser(Parser):
     def __init__(self, max_len=None, name=''):
         super().__init__(max_len=max_len, name=name)
@@ -213,7 +214,7 @@ class OracleBasedParser(Parser):
                 vocabs = self._split_lines(line)[::-1] if reverse else self._split_lines(line)
             else:
                 vocabs = line[::-1] if reverse else line
-            assert self.max_length == len(vocabs), 'line should satisfy max len! max_len: {}, line_len: {}'.\
+            assert self.max_length == len(vocabs), 'line should satisfy max len! max_len: {}, line_len: {}'. \
                 format(self.max_length, len(vocabs))
             return [self.vocab2id[v] for v in vocabs], self.max_length
 

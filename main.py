@@ -47,7 +47,7 @@ parser.add_argument('-r', '--restore', type=str, help='restore types', nargs='+'
 args = parser.parse_args()
 
 if args.restore is not None:
-    args.restore = [r if r != 'nll' else '-nll' for r in args.restore]
+    args.restore = [r if not r.startswith('nll') else ('-' + r) for r in args.restore]
     model_restore_zip = dict(zip(args.models, args.restore))
     print(model_restore_zip)
 if args.temperatures is None:
@@ -71,6 +71,7 @@ print(args.models)
 
 if args.k is not None:
     from evaluator import k_fold
+
     assert not (True in [k >= k_fold for k in args.k])
 
 if args.action == 'train':
@@ -110,7 +111,7 @@ elif args.action.startswith('eval'):
         (RealWorldEvaluator.test_restore_types[0] if args.mode == 'real' else OracleEvaluator.test_restore_types[0])
     parser = ParserClass(name=dataset_prefix_name + '-words')
     test_data_loader = SentenceDataloader(dataset_prefix_name + '-test')
-    # ts = parser.line2id_format(test_data_loader.get_data())
+    # ts, _ = parser.line2id_format(test_data_loader.get_data())
     ts = test_data_loader.get_data()
     for k in args.k:
         # m = create_model(m_name, None)

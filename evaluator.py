@@ -200,6 +200,7 @@ class RealWorldEvaluator(Evaluator):
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
         min_size = min(len(samples_with_additional_fields), len(refs_with_additional_fields))
+        print('sample size to ------>>>>>> {}'.format(min_size))
         sample_tokens = sample_tokens[:min_size]
 
         if self.selfbleu_n_sampling == -1:
@@ -255,7 +256,7 @@ class OracleEvaluator(Evaluator):
             self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
             self.multiset_distances = MultisetDistances(test_tokens, min_n=2, max_n=5)
         elif mode == 'gen':
-            pass
+            self.oracle = Oracle_LSTM()
         elif mode == 'eval_precheck':
             pass
         else:
@@ -283,8 +284,13 @@ class OracleEvaluator(Evaluator):
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
-        test_lines = self.parser.id_format2line(test_codes)
-        sample_lines = self.parser.id_format2line(sample_codes)
+        test_lines = self.parser.id_format2line(test_codes, merge=False)
+        sample_lines = self.parser.id_format2line(sample_codes, merge=False)
+        test_lines = np.array([[int(x) for x in y] for y in test_lines])
+        sample_lines = np.array([[int(x) for x in y] for y in sample_lines])
+        print(test_lines.shape)
+        print(sample_lines.shape)
+
         lnqfromp = model.get_persample_ll(self.temperature, test_codes)
         lnqfromq = model.get_persample_ll(self.temperature, sample_codes)
         lnpfromp = self.oracle.log_probability(test_lines)
@@ -297,6 +303,7 @@ class OracleEvaluator(Evaluator):
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
         min_size = min(len(samples_with_additional_fields), len(refs_with_additional_fields))
+        print('sample size to ------>>>>>> {}'.format(min_size))
         sample_tokens = sample_tokens[:min_size]
 
         if self.selfbleu_n_sampling == -1:
