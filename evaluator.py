@@ -197,11 +197,12 @@ class RealWorldEvaluator(Evaluator):
         return {'gen': {'lnq': lnqfromq}, 'test': {'lnq': lnqfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
+        min_size = min(len(samples_with_additional_fields), len(self.test_data), len(refs_with_additional_fields))
+        print('sample size to ------>>>>>> {}'.format(min_size))
+        samples_with_additional_fields = samples_with_additional_fields[:min_size]
+        refs_with_additional_fields = refs_with_additional_fields[:min_size]
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
-        min_size = min(len(samples_with_additional_fields), len(refs_with_additional_fields))
-        print('sample size to ------>>>>>> {}'.format(min_size))
-        sample_tokens = sample_tokens[:min_size]
 
         if self.selfbleu_n_sampling == -1:
             subsampled_tokens = sample_tokens
@@ -299,12 +300,13 @@ class OracleEvaluator(Evaluator):
                 'test': {'lnq': lnqfromp, 'lnp': lnpfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
+        min_size = min(len(samples_with_additional_fields), len(self.test_data), len(refs_with_additional_fields))
+        print('sample size to ------>>>>>> {}'.format(min_size))
+        samples_with_additional_fields = samples_with_additional_fields[:min_size]
+        refs_with_additional_fields = refs_with_additional_fields[:min_size]
         from metrics.divergences import Bhattacharyya, Jeffreys
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
-        min_size = min(len(samples_with_additional_fields), len(refs_with_additional_fields))
-        print('sample size to ------>>>>>> {}'.format(min_size))
-        sample_tokens = sample_tokens[:min_size]
 
         if self.selfbleu_n_sampling == -1:
             subsampled_tokens = sample_tokens
@@ -313,17 +315,23 @@ class OracleEvaluator(Evaluator):
             subsamples_mask = np.random.choice(range(len(sample_tokens)), self.selfbleu_n_sampling, replace=False)
             subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
 
-        lnqfromp = [r['lnq'] for r in refs_with_additional_fields]
-        lnqfromq = [r['lnq'] for r in samples_with_additional_fields]
-        lnpfromp = [r['lnp'] for r in refs_with_additional_fields]
-        lnpfromq = [r['lnp'] for r in samples_with_additional_fields]
+        lnqfromp = np.array([r['lnq'] for r in refs_with_additional_fields])
+        lnqfromq = np.array([r['lnq'] for r in samples_with_additional_fields])
+        lnpfromp = np.array([r['lnp'] for r in refs_with_additional_fields])
+        lnpfromq = np.array([r['lnp'] for r in samples_with_additional_fields])
+
+        print(lnqfromp.shape)
+        print(lnqfromq.shape)
+        print(lnpfromp.shape)
+        print(lnpfromq.shape)
+
         self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
 
         scores_persample = {
-            'lnqfromp': lnqfromp,
-            'lnqfromq': lnqfromq,
-            'lnpfromp': lnpfromp,
-            'lnpfromq': lnpfromq,
+            'lnqfromp': list(lnqfromp),
+            'lnqfromq': list(lnqfromq),
+            'lnpfromp': list(lnpfromp),
+            'lnpfromq': list(lnpfromq),
             'bleu2': self.bleu2.get_score(sample_tokens),
             'bleu3': self.bleu3.get_score(sample_tokens),
             'bleu4': self.bleu4.get_score(sample_tokens),
@@ -337,6 +345,7 @@ class OracleEvaluator(Evaluator):
         scores_persample['sub_bleu3'] = list(np.array(scores_persample['bleu3'])[subsamples_mask])
         scores_persample['sub_bleu4'] = list(np.array(scores_persample['bleu4'])[subsamples_mask])
         scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
+
         scores_mean = {
             'bhattacharyya': Bhattacharyya(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
             'jeffreys': Jeffreys(lnpfromp, lnqfromp, lnpfromq, lnqfromq),

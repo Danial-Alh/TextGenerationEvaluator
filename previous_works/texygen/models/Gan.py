@@ -122,6 +122,11 @@ class Gan:
 
 class GeneralGenerator(object):
     def __init__(self):
+        self.fork_degree = 64
+        self.naive_temperature_init()
+        self.unbiased_temperature_init()
+
+    def naive_temperature_init(self):
         t_gen_o = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length,
                                                dynamic_size=False, infer_shape=True)
         t_gen_x = tensor_array_ops.TensorArray(dtype=tf.int32, size=self.sequence_length,
@@ -174,7 +179,7 @@ class GeneralGenerator(object):
                        self.h0, g_predictions))
 
         self.temp_g_predictions = tf.transpose(self.temp_g_predictions.stack(),
-                                          perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
+                                               perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
 
         self.temp_pretrain_loss = -tf.reduce_sum(
             tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
@@ -190,6 +195,56 @@ class GeneralGenerator(object):
                                             1e-20, 1.0)),
                     axis=-1), self.x.shape)
         self.selfdefined_temp_persample_ll = tf.reduce_sum(self.selfdefined_temp_persample_len_ll, axis=-1)
+
+    def unbiased_temperature_init(self):
+        self.unbiased_temperature = tf.placeholder(tf.float32)
+        ln_p = tf.zeros((self.fork_degree,), name='ln_p_temps')
+
+        # When current index i < given_num, use the provided tokens as the input at each time step
+        def get_expected_foraward_prbability(prefix_len, x_start, h_start):
+            def _g_recurrence_1(i, x_t, h_tm1, ln_prob):
+                h_t = self.g_recurrent_unit(x_t, h_tm1)  # hidden_memory_tuple
+                o_t = self.g_output_unit(h_t)
+                next_token = tf.cast(tf.reshape(tf.multinomial(o_t, 1), [self.batch_size]), tf.int32)
+                x_tp1 = tf.nn.embedding_lookup(self.g_embeddings, next_token)  # batch x emb_dim
+                ln_prob += tf.multiply(tf.one_hot(next_token, self.num_vocabulary, 1.0, 0.0),
+                                       tf.nn.log_softmax(o_t))
+                return i + 1, x_tp1, h_t, ln_prob
+
+            x_start = tf.tile(tf.expand_dims(x_start, axis=0), (self.fork_degree, 1))
+            h_start = tf.tile(tf.expand_dims(h_start, axis=0), (self.fork_degree, 1))
+            _, _, _, _, prefix_ln_p = control_flow_ops.while_loop(
+                cond=lambda i, _1, _2, _4, _5: i < self.sequence_length,
+                body=_g_recurrence_1,
+                loop_vars=(prefix_len, x_start, h_start, ln_p)
+            )
+            prefix_ln_p *= self.unbiased_temperature
+            return tf.reduce_logsumexp(prefix_ln_p)
+        def get_powered_probs():
+            pass
+        # When current index i >= given_num, start roll-out, use the output as time step t as the input at time step t+1
+        def _g_recurrence_2(i, x_t, h_tm1, given_num, gen_x):
+            h_t = self.g_recurrent_unit(x_t, h_tm1)  # hidden_memory_tuple
+            o_t = self.g_output_unit(h_t)  # batch x vocab , logits not prob
+
+            next_token = tf.cast(tf.reshape(tf.multinomial(o_t, 1), [self.batch_size]), tf.int32)
+            x_tp1 = tf.nn.embedding_lookup(self.g_embeddings, next_token)  # batch x emb_dim
+            gen_x = gen_x.write(i, next_token)  # indices, batch_size
+            return i + 1, x_tp1, h_t, given_num, gen_x
+
+        i, x_t, h_tm1, given_num, self.gen_x = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, given_num, _4: i < given_num,
+            body=_g_recurrence_1,
+            loop_vars=(tf.constant(0, dtype=tf.int32),
+                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token), self.h0, self.given_num, gen_x))
+
+        _, _, _, _, self.gen_x = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, _3, _4: i < self.sequence_length,
+            body=_g_recurrence_2,
+            loop_vars=(i, x_t, h_tm1, given_num, self.gen_x))
+
+        self.gen_x = self.gen_x.stack()  # seq_length x batch_size
+        self.gen_x = tf.transpose(self.gen_x, perm=[1, 0])  # batch_size x seq_length
 
     def temperature_generate(self, sess, temperature):
         outputs = sess.run(self.temp_gen_x, {self.temperature: temperature})

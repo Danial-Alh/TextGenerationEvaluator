@@ -37,7 +37,8 @@ elif [ $1 = "under_emnlp" ]; then
 elif [ $1 = "ipm_up" ]; then
 #    find data/temp_models/ -name *.zip -exec rm {} ';'
 #    find data/temp_models/ -name best_history.json -exec rm {} ';'
-    rsync --exclude "*/*.zip" --exclude "*/*history.json" -vau data/temp_models/ "$ipm"temp_models
+#    rsync --exclude "*/*.zip" --exclude "*/*history.json" -vau data/temp_models/ "$ipm"temp_models
+    rsync --exclude "*/*.json" -vau data/temp_models/ "$ipm"temp_models
     rsync --exclude "*fold" -vau data/obj_files/ "$ipm"obj_files/
     rsync --exclude "*train*" --exclude "*.gz*" --exclude "*parsed*" --exclude "*.tar*" -vau data/dataset/ "$ipm"dataset/
 #    scp -r data/temp_models/ $ipm
