@@ -86,7 +86,8 @@ class BertDistance:
     def get_score(self, list_of_text):
         features = self._get_features(list_of_text)
         assert not diff(self.reference_features.shape[0], features.shape[0]), \
-            "[!] Warning: different size between reference and input can be effect on the result."
+            "[!] Warning: different size between reference and input can be effect on the result. ref: {}, test: {}" \
+                .format(self.reference_features.shape[0], features.shape[0])
 
         mu, sigma = self._calculate_statistics(features)
         FBD_res = math.sqrt(calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma))

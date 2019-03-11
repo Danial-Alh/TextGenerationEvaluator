@@ -183,10 +183,16 @@ class TexyGen(BaseModel):
         dataloader = self.dataloader_class(batch_size=self.model.batch_size,
                                            seq_length=self.model.sequence_length)
         dataloader.create_batches(data_loc)
-
+        if temperature['value'] is None:
+            item_to_be_fetched = self.model.generator.selfdefined_persample_ll
+        elif temperature['type'] == 'biased':
+            item_to_be_fetched = self.model.generator.selfdefined_temp_persample_ll
+        elif temperature['type'] == 'unbiased':
+            item_to_be_fetched = self.model.generator.unbiased_temperature_persample_ll
+        else:
+            raise BaseException('invalid temperature type!')
         inll = ItemFetcher(data_loader=dataloader, rnn=self.model.generator,
-                           item_to_be_fetched=self.model.generator.selfdefined_persample_ll if temperature is None
-                           else self.model.generator.selfdefined_temp_persample_ll,
+                           item_to_be_fetched=item_to_be_fetched,
                            sess=self.model.sess, temperature=temperature)
         inll.set_name('persample_ll' + data_loc)
         return inll

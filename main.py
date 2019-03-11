@@ -41,6 +41,7 @@ parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate
                                                                                              'export', 'dump'],
                     required=True)
 parser.add_argument('-k', type=int, help='which fold to action be done on', nargs='+')
+parser.add_argument('--temper_mode', type=str, help='biased/unbiased temperature mode', choices=['unbiased', 'biased'])
 parser.add_argument('-t', '--temperatures', type=float, help='softmax temperatures', nargs='+')
 parser.add_argument('-m', '--models', type=str, help='model names', nargs='+', choices=all_models)
 parser.add_argument('-r', '--restore', type=str, help='restore types', nargs='+')
@@ -51,7 +52,8 @@ if args.restore is not None:
     model_restore_zip = dict(zip(args.models, args.restore))
     print(model_restore_zip)
 if args.temperatures is None:
-    args.temperatures = [1.]
+    args.temperatures = [None]
+args.temperatures = [{'type': args.temper_mode, 'value': v} for v in args.temperatures]
 print('temperatures: {}, K: {}'.format(args.temperatures, args.k))
 
 dataset_prefix_name = args.data.split('-')[0]
@@ -76,6 +78,7 @@ if args.k is not None:
 
 if args.action == 'train':
     assert args.k is not None
+    assert len(args.temperatures) == 0 and args.temperatures[0]['value'] is None
     parser = ParserClass(name=dataset_prefix_name + '-words')
     test_data_loader = SentenceDataloader(dataset_prefix_name + '-test')
     train_data_loader = SentenceDataloader(dataset_prefix_name + '-train')
@@ -84,7 +87,8 @@ if args.action == 'train':
         print('********************* training K{} *********************'.format(k))
         tr, va = dm.get_data(k)
         print(len(tr), len(va))
-        ev = EvaluatorClass(tr, va, None, parser, args.action, k, dataset_prefix_name)
+        ev = EvaluatorClass(tr, va, None, parser=parser, mode=args.action, k=k, temperature=args.temperatures[0],
+                            dm_name=dataset_prefix_name)
 
         if args.models is None:
             raise BaseException('specify the model to be trained!')
@@ -101,7 +105,8 @@ elif args.action == 'gen':
         for k in args.k:
             print('********************* sample generation K{}, temperature: {} *********************'.
                   format(k, temperature))
-            ev = EvaluatorClass(None, None, ts, parser, args.action, k, temperature, dataset_prefix_name)
+            ev = EvaluatorClass(None, None, ts, parser=parser, mode=args.action, k=k, temperature=temperature,
+                                dm_name=dataset_prefix_name)
             # ev.generate_samples(args.models, args.restore)
             ev.generate_samples(model_restore_zip)
 elif args.action.startswith('eval'):
@@ -115,7 +120,8 @@ elif args.action.startswith('eval'):
     ts = test_data_loader.get_data()
     for k in args.k:
         # m = create_model(m_name, None)
-        ev = EvaluatorClass(None, None, ts, None, args.action, k, None, dataset_prefix_name)
+        ev = EvaluatorClass(None, None, ts, parser=None, mode=args.action, k=k, temperature=None,
+                            dm_name=dataset_prefix_name)
         # dmp = Dumper(m, k, dataset_prefix_name)
         for temperature in args.temperatures:
             print('********************* evaluating K{}, temperature: {} *********************'.

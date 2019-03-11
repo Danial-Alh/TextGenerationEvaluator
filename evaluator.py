@@ -17,7 +17,7 @@ from utils.path_configs import MODEL_PATH, EXPORT_PATH, BERT_PATH
 
 
 class Evaluator:
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, temperature=None, dm_name=''):
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k, temperature, dm_name=''):
         # in train and gen mode, data is coded but in eval mode data is raw
         self.parser = parser
         self.train_data = train_data
@@ -50,39 +50,69 @@ class Evaluator:
         assert model_restore_zip is not None
 
         for model_name, restore_type in model_restore_zip.items():
-            print(restore_type)
-            # for model_name in model_names:
-            print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
+            if model_name != 'real':
+                print(restore_type)
+                # for model_name in model_names:
+                print('k: {}, restore_type: {}, model_name: {}'.format(self.k, restore_type, model_name))
 
-            tracker = BestModelTracker(model_name, self)
-            dumper = tracker.dumper
-            model = tracker.model
-            dumper.restore_model(restore_type)
-            sample_codes = model.generate_samples(self.test_n_sampling, self.temperature)
-            additional_fields = self.get_sample_additional_fields(model, sample_codes,
-                                                                  self.test_data, restore_type)
+                tracker = BestModelTracker(model_name, self)
+                dumper = tracker.dumper
+                model = tracker.model
+                dumper.restore_model(restore_type)
+                sample_codes = model.generate_samples(self.test_n_sampling, self.temperature)
+                additional_fields = self.get_sample_additional_fields(model, sample_codes,
+                                                                      self.test_data, restore_type)
 
-            sample_lines = self.parser.id_format2line(sample_codes)
+                sample_lines = self.parser.id_format2line(sample_codes)
 
-            key = list(additional_fields['gen'].keys())[0]
-            min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
-            sample_lines = sample_lines[:min_len]
-            for key in additional_fields['gen']:
-                additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
+                key = list(additional_fields['gen'].keys())[0]
+                min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
+                sample_lines = sample_lines[:min_len]
+                for key in additional_fields['gen']:
+                    additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
 
-            key = list(additional_fields['test'].keys())[0]
-            min_len = min(len(self.test_data), len(additional_fields['test'][key]))
-            test_lines = self.parser.id_format2line(self.test_data[:min_len])
-            for key in additional_fields['test']:
-                additional_fields['test'][key] = additional_fields['test'][key][:min_len]
+                key = list(additional_fields['test'].keys())[0]
+                min_len = min(len(self.test_data), len(additional_fields['test'][key]))
+                test_lines = self.parser.id_format2line(self.test_data[:min_len])
+                for key in additional_fields['test']:
+                    additional_fields['test'][key] = additional_fields['test'][key][:min_len]
 
-            dumper.dump_samples_with_additional_fields(sample_lines,
-                                                       additional_fields['gen'],
-                                                       restore_type, 'gen', self.temperature)
-            dumper.dump_samples_with_additional_fields(test_lines,
-                                                       additional_fields['test'],
-                                                       restore_type, 'test', self.temperature)
-            model.delete()
+                dumper.dump_samples_with_additional_fields(sample_lines,
+                                                           additional_fields['gen'],
+                                                           restore_type, 'gen', self.temperature)
+                dumper.dump_samples_with_additional_fields(test_lines,
+                                                           additional_fields['test'],
+                                                           restore_type, 'test', self.temperature)
+                model.delete()
+            else:
+                if isinstance(self, RealWorldEvaluator):
+                    from data_management.data_manager import SentenceDataManager
+                    from data_management.parsers import WordBasedParser
+                    ParserClass, DataManagerClass = WordBasedParser, SentenceDataManager
+                elif isinstance(self, OracleEvaluator):
+                    from data_management.parsers import OracleBasedParser
+                    from data_management.data_manager import OracleDataManager
+                    ParserClass, DataManagerClass = OracleBasedParser, OracleDataManager
+                parser = ParserClass(name=self.dm_name + '-words')
+                from data_management.data_loaders import SentenceDataloader
+                test_data_loader = SentenceDataloader(self.dm_name + '-test')
+                train_data_loader = SentenceDataloader(self.dm_name + '-train')
+                dm = DataManagerClass(train_data_loader, test_data_loader, parser=parser, k_fold=k_fold)
+                tr, _ = dm.get_data(self.k, parse=True)
+                ts = dm.get_data(-1, parse=True)
+                min_size = min(len(tr), len(ts))
+                tr, ts = tr[:min_size], ts[:min_size]
+                model = create_model('real', None)
+                dumper = Dumper(model, self.k, self.dm_name)
+                additional_fields = self.get_sample_additional_fields(model, None,
+                                                                      ts, restore_type)
+
+                dumper.dump_samples_with_additional_fields(tr,
+                                                           additional_fields['gen'],
+                                                           restore_type, 'gen', self.temperature)
+                dumper.dump_samples_with_additional_fields(ts,
+                                                           additional_fields['test'],
+                                                           restore_type, 'test', self.temperature)
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
         pass
@@ -105,6 +135,13 @@ class Evaluator:
                                                                                      self.temperature)
             samples_with_additional_fields = \
                 dumper.load_samples_with_additional_fields(restore_type, 'gen', self.temperature)
+            print('samples: {}, refs: {}, raw tests: {}'.format(len(samples_with_additional_fields),
+                                                                len(refs_with_additional_fields),
+                                                                len(self.test_data)))
+            min_size = min(len(samples_with_additional_fields), len(self.test_data), len(refs_with_additional_fields))
+            print('sample size to ------>>>>>> {}'.format(min_size))
+            samples_with_additional_fields = samples_with_additional_fields[:min_size]
+            refs_with_additional_fields = refs_with_additional_fields[:min_size]
 
             scores_persample, scores = self.get_test_scores(refs_with_additional_fields,
                                                             samples_with_additional_fields)
@@ -142,7 +179,7 @@ class Evaluator:
 class RealWorldEvaluator(Evaluator):
     test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
 
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, temperature=None, dm_name=''):
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k, temperature, dm_name):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, temperature, dm_name)
         self.selfbleu_n_sampling = selfbleu_n_s
 
@@ -161,8 +198,6 @@ class RealWorldEvaluator(Evaluator):
             self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
             self.multiset_distances = MultisetDistances(test_tokens, min_n=2, max_n=5)
 
-            # self.fbd = FBD(self.test_data, 64, BERT_PATH)
-            # self.embd = EMBD(self.test_data, 64, BERT_PATH)
             print(BERT_PATH)
             self.fbd_embd = BertDistance(self.test_data, max_length=max_l, bert_model_dir=BERT_PATH)
         elif mode == 'gen':
@@ -192,15 +227,14 @@ class RealWorldEvaluator(Evaluator):
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
+        if model.get_name().lower() == 'real':
+            dummy_arr = [1. for _ in range(len(test_codes))]
+            return {'gen': {'lnq': dummy_arr}, 'test': {'lnq': dummy_arr}}
         lnqfromp = model.get_persample_ll(self.temperature, test_codes)
         lnqfromq = model.get_persample_ll(self.temperature, sample_codes)
         return {'gen': {'lnq': lnqfromq}, 'test': {'lnq': lnqfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
-        min_size = min(len(samples_with_additional_fields), len(self.test_data), len(refs_with_additional_fields))
-        print('sample size to ------>>>>>> {}'.format(min_size))
-        samples_with_additional_fields = samples_with_additional_fields[:min_size]
-        refs_with_additional_fields = refs_with_additional_fields[:min_size]
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
 
@@ -228,7 +262,9 @@ class RealWorldEvaluator(Evaluator):
         scores_persample['sub_bleu3'] = list(np.array(scores_persample['bleu3'])[subsamples_mask])
         scores_persample['sub_bleu4'] = list(np.array(scores_persample['bleu4'])[subsamples_mask])
         scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
+
         scores_mean = {**self.fbd_embd.get_score(sample_lines), **self.multiset_distances.get_score(sample_tokens)}
+
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
         return scores_persample, scores_mean
@@ -237,7 +273,7 @@ class RealWorldEvaluator(Evaluator):
 class OracleEvaluator(Evaluator):
     test_restore_types = ['-nll_oracle', 'last_iter']
 
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k=0, temperature=None, dm_name=''):
+    def __init__(self, train_data, valid_data, test_data, parser, mode, k, temperature, dm_name):
         super().__init__(train_data, valid_data, test_data, parser, mode, k, temperature, dm_name)
         self.selfbleu_n_sampling = selfbleu_n_s
 
@@ -285,6 +321,10 @@ class OracleEvaluator(Evaluator):
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
+        if model.get_name().lower() == 'real':
+            dummy_arr = [1. for _ in range(len(test_codes))]
+            return {'gen': {'lnq': dummy_arr, 'lnp': dummy_arr},
+                    'test': {'lnq': dummy_arr, 'lnp': dummy_arr}}
         test_lines = self.parser.id_format2line(test_codes, merge=False)
         sample_lines = self.parser.id_format2line(sample_codes, merge=False)
         test_lines = np.array([[int(x) for x in y] for y in test_lines])
@@ -300,10 +340,6 @@ class OracleEvaluator(Evaluator):
                 'test': {'lnq': lnqfromp, 'lnp': lnpfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
-        min_size = min(len(samples_with_additional_fields), len(self.test_data), len(refs_with_additional_fields))
-        print('sample size to ------>>>>>> {}'.format(min_size))
-        samples_with_additional_fields = samples_with_additional_fields[:min_size]
-        refs_with_additional_fields = refs_with_additional_fields[:min_size]
         from metrics.divergences import Bhattacharyya, Jeffreys
         sample_lines = [r['text'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
@@ -384,15 +420,15 @@ class Dumper:
     def dump_generated_samples(self, samples, load_key, temperature):
         if not isinstance(samples[0], str):
             samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, get_temperature_strigified(temperature) + '_' +
+        write_text(samples, os.path.join(self.saving_path, get_temperature_stringified(temperature) + '_' +
                                          load_key + '_based_samples.txt'), is_complete_path=True)
 
     def load_generated_samples(self, load_key, temperature):
-        return read_text(os.path.join(self.saving_path, get_temperature_strigified(temperature) + '_' +
+        return read_text(os.path.join(self.saving_path, get_temperature_stringified(temperature) + '_' +
                                       load_key + '_based_samples.txt'), is_complete_path=True)
 
     def get_generated_samples_path(self, load_key, temperature):
-        return os.path.join(self.saving_path, get_temperature_strigified(temperature) + '_' +
+        return os.path.join(self.saving_path, get_temperature_stringified(temperature) + '_' +
                             load_key + '_based_samples.txt')
 
     def dump_best_history(self, best_history):
@@ -403,30 +439,30 @@ class Dumper:
         dump_json([
             {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
-            sample_label + get_temperature_strigified(temperature) + '_' + load_key + '_based_samples',
+            sample_label + get_temperature_stringified(temperature) + '_' + load_key + '_based_samples',
             self.saving_path)
 
     def load_samples_with_additional_fields(self, load_key, sample_label, temperature):
         result = load_json(
-            sample_label + get_temperature_strigified(temperature) + '_' + load_key + '_based_samples',
+            sample_label + get_temperature_stringified(temperature) + '_' + load_key + '_based_samples',
             self.saving_path)
         return result
 
     def dump_final_results(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + get_temperature_strigified(temperature) +
+        dump_json(results, self.final_result_file_name + get_temperature_stringified(temperature) +
                   '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def load_final_results(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + get_temperature_strigified(temperature) +
+        return load_json(self.final_result_file_name + get_temperature_stringified(temperature) +
                          '_' + restore_type + 'restore', self.final_result_parent_path)
 
     def dump_final_results_details(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + get_temperature_strigified(temperature)
+        dump_json(results, self.final_result_file_name + get_temperature_stringified(temperature)
                   + '_' + restore_type + 'restore_details',
                   self.final_result_parent_path)
 
     def load_final_results_details(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + get_temperature_strigified(temperature)
+        return load_json(self.final_result_file_name + get_temperature_stringified(temperature)
                          + '_' + restore_type + 'restore_details',
                          self.final_result_parent_path)
 
@@ -486,10 +522,15 @@ class BestModelTracker:
 max_l, test_n_sampling, k_fold, selfbleu_n_s = 0, 0, 0, 0
 
 
-def get_temperature_strigified(temperature):
-    if temperature is None:
+def get_temperature_stringified(temperature):
+    if temperature['value'] is None:
         return ''
-    return '_' + format(temperature, '0.6f')
+    elif temperature['type'] == 'biased':
+        return '_' + format(temperature['value'], '0.6f')
+    elif temperature['type'] == 'unbiased':
+        return '_unbiased' + format(temperature['value'], '0.6f')
+    else:
+        raise BaseException('invalid temperature type!!')
 
 
 def update_config(dm_name):

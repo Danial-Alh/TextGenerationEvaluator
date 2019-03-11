@@ -14,8 +14,14 @@ def generate_samples(sess, trainable_model, batch_size, generated_num, output_fi
                      temperature=None):
     # Generate Samples
     generated_samples = []
-    gen_func = trainable_model.generate if temperature is None else \
-        (lambda s: trainable_model.temperature_generate(s, temperature))
+    if temperature['value'] is None:
+        gen_func = trainable_model.generate
+    elif temperature['type'] == 'biased':
+        gen_func =lambda s: trainable_model.temperature_generate(s, temperature['value'])
+    elif temperature['type'] == 'unbiased':
+        gen_func = lambda s: trainable_model.unbiased_temperature_generate(s, temperature['value'])
+    else:
+        raise BaseException('invalid temperature type!')
     for _ in range(int(generated_num / batch_size) + 1):
         sample = gen_func(sess)
         generated_samples.extend(sample)

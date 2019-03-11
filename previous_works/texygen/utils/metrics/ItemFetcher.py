@@ -31,10 +31,16 @@ class ItemFetcher(Metrics):
             # try:
             #     g_loss = self.rnn.get_nll(self.sess, batch)
             # except Exception as e:
-            if self.temperature is None:
+            if self.temperature['value'] is None:
                 g_loss = self.sess.run(self.item_to_be_fetched, {self.rnn.x: batch})
-            else:
+            elif self.temperature['type'] == 'biased':
                 g_loss = self.sess.run(self.item_to_be_fetched, {self.rnn.x: batch,
-                                                                 self.rnn.temperature: self.temperature})
+                                                                     self.rnn.temperature: self.temperature['value']})
+            elif self.temperature['type'] == 'unbiased':
+                g_loss = [self.sess.run(self.item_to_be_fetched,
+                                        {self.rnn.dynamic_batch_x: [b],
+                                         self.rnn.unbiased_temperature: self.temperature['value']})
+                          for b in batch]
             nll.extend(g_loss)
+        print("**************** ohhhhhhhhhhhhhh here nll shape ------> np.array(nll).shape)")
         return nll

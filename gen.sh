@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
 set -x
-./code_collector.sh phd
+#./code_collector.sh phd
 #./code_collector.sh v_emnlp
 #./code_collector.sh under_emnlp
-#python3 main.py real -d wiki72-train -a gen -k 2 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
-#python3 main.py real -d coco60-train -a gen -k 1 2 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
-#python3 main.py real -d imdb30-train -a gen -k 1 2 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
-#python3 main.py real -d threecorpus75-train -a gen -k 1 2 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
-#python3 main.py real -d emnlp60-train -a gen -k 1 2 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
-python3 main.py real -d chpoem5-train -a gen -k 1 2 -m mle mle seqgan maligan rankgan -r last_iter nll bleu4 bleu4 bleu4
-######################################################
-#python3 main.py real -d wiki72-train -a gen -k 0 1 2 -m mle -r nll
-#python3 main.py real -d coco60-train -a gen -k 0 1 2 -m mle -r nll
-#python3 main.py real -d imdb30-train -a gen -k 0 1 2 -m mle -r nll
-#python3 main.py real -d threecorpus75-train -a gen -k 0 1 2 -m mle -r nll
-#python3 main.py real -d emnlp60-train -a gen -k 0 1 2 -m mle -r nll
-#python3 main.py real -d chpoem5-train -a gen -k 1 2 -m mle -r nll
-./code_collector.sh ipm_up
+
+python main.py real -m real -r last_iter -k 0 1 2 -a gen -d chpoem5-train
+python main.py real -m real -r last_iter -k 0 1 2 -a gen -d coco60-train
+python main.py real -m real -r last_iter -k 0 1 2 -a gen -d imdb30-train
+python main.py real -m real -r last_iter -k 0 1 2 -a gen -d emnlp60-train
+python main.py real -m real -r last_iter -k 0 1 2 -a gen -d threecorpus75-train
+python main.py real -m real -r last_iter -k 0 1 2 -a gen -d wiki72-train
+python main.py oracle -m real -r last_iter -k 0 1 2 -a gen -d oracle75-train
+
+#./code_collector.sh ipm_up
 set +x
-#python3 main.py real -d emnlp60-train -a gen -k 1 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
-#python3 main.py real -d chpoem5-train -a gen -k 1 -m mle seqgan maligan rankgan -r last_iter bleu4 bleu4 bleu4
