@@ -41,7 +41,8 @@ parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate
                                                                                              'export', 'dump'],
                     required=True)
 parser.add_argument('-k', type=int, help='which fold to action be done on', nargs='+')
-parser.add_argument('--temper_mode', type=str, help='biased/unbiased temperature mode', choices=['unbiased', 'biased'])
+parser.add_argument('--temper_mode', type=str, help='biased/unbiased temperature mode', choices=['unbiased', 'biased'],
+                    default='biased')
 parser.add_argument('-t', '--temperatures', type=float, help='softmax temperatures', nargs='+')
 parser.add_argument('-m', '--models', type=str, help='model names', nargs='+', choices=all_models)
 parser.add_argument('-r', '--restore', type=str, help='restore types', nargs='+')

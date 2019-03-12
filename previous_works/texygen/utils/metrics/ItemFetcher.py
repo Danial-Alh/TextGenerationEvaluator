@@ -41,5 +41,4 @@ class ItemFetcher(Metrics):
                                        {self.rnn.dynamic_batch_x: batch,
                                         self.rnn.unbiased_temperature: self.temperature['value']})
             nll.extend(g_loss)
-        print("**************** ohhhhhhhhhhhhhh here nll shape ------> " + str(np.array(nll).shape))
         return nll
