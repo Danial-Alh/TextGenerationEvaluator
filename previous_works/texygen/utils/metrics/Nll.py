@@ -36,10 +36,9 @@ class Nll(Metrics):
                 g_loss = self.sess.run(self.rnn.temp_pretrain_loss, {self.rnn.x: batch,
                                                                      self.rnn.temperature: self.temperature['value']})
             elif self.temperature['type'] == 'unbiased':
-                g_loss = [self.sess.run(self.rnn.unbiased_temperature_persample_ll,
-                                        {self.rnn.dynamic_batch_x: [b],
-                                         self.rnn.unbiased_temperature: self.temperature['value']})
-                          for b in batch]
+                g_loss = self.sess.run(self.rnn.unbiased_temperature_persample_ll,
+                                       {self.rnn.dynamic_batch_x: batch,
+                                        self.rnn.unbiased_temperature: self.temperature['value']})
             nll.append(g_loss)
-            print("**************** ohhhhhhhhhhhhhh here nll shape ------> np.array(nll).shape)")
+        print("**************** ohhhhhhhhhhhhhh here nll shape ------> " + str(np.array(nll).shape))
         return np.mean(nll)

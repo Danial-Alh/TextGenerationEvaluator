@@ -22,7 +22,7 @@ def generate_samples(sess, trainable_model, batch_size, generated_num, output_fi
         gen_func = lambda s: trainable_model.unbiased_temperature_generate(s, temperature['value'])
     else:
         raise BaseException('invalid temperature type!')
-    for _ in range(int(generated_num / batch_size) + 1):
+    for _ in tqdm(range(int(generated_num / batch_size) + 1), ncols=80):
         sample = gen_func(sess)
         generated_samples.extend(sample)
     generated_samples = generated_samples[:generated_num]
