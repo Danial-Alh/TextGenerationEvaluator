@@ -65,14 +65,14 @@ class Evaluator:
 
                 sample_lines = self.parser.id_format2line(sample_codes)
 
-                key = list(additional_fields['gen'].keys())[0]
-                min_len = min(len(sample_lines), len(additional_fields['gen'][key]))
+                min_len = min([len(self.test_data)] + [len(additional_fields['gen'][key]) for key in \
+                                                       additional_fields['gen'].keys()])
                 sample_lines = sample_lines[:min_len]
                 for key in additional_fields['gen']:
                     additional_fields['gen'][key] = additional_fields['gen'][key][:min_len]
 
-                key = list(additional_fields['test'].keys())[0]
-                min_len = min(len(self.test_data), len(additional_fields['test'][key]))
+                min_len = min([len(self.test_data)] + [len(additional_fields['test'][key]) for key in \
+                                                       additional_fields['test'].keys()])
                 test_lines = self.parser.id_format2line(self.test_data[:min_len])
                 for key in additional_fields['test']:
                     additional_fields['test'][key] = additional_fields['test'][key][:min_len]
@@ -199,7 +199,7 @@ class RealWorldEvaluator(Evaluator):
             self.multiset_distances = MultisetDistances(test_tokens, min_n=2, max_n=5)
 
             print(BERT_PATH)
-            self.fbd_embd = BertDistance(self.test_data, max_length=max_l, bert_model_dir=BERT_PATH)
+            # self.fbd_embd = BertDistance(self.test_data, max_length=max_l, bert_model_dir=BERT_PATH)
         elif mode == 'gen':
             pass
         elif mode == 'eval_precheck':
@@ -263,7 +263,8 @@ class RealWorldEvaluator(Evaluator):
         scores_persample['sub_bleu4'] = list(np.array(scores_persample['bleu4'])[subsamples_mask])
         scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
 
-        scores_mean = {**self.fbd_embd.get_score(sample_lines), **self.multiset_distances.get_score(sample_tokens)}
+        # scores_mean = {**self.fbd_embd.get_score(sample_lines), **self.multiset_distances.get_score(sample_tokens)}
+        scores_mean = self.multiset_distances.get_score(sample_tokens)
 
         for key in scores_persample:
             scores_mean[key] = np.mean(scores_persample[key])
@@ -436,6 +437,8 @@ class Dumper:
 
     def dump_samples_with_additional_fields(self, samples, additional_fields: dict, load_key, sample_label,
                                             temperature):
+        print(len(samples))
+        print([len(additional_fields[key]) for key in additional_fields.keys()])
         dump_json([
             {**{'text': samples[i]}, **{key: additional_fields[key][i] for key in additional_fields.keys()}}
             for i in range(len(samples))],
