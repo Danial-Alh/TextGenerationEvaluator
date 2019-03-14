@@ -35,8 +35,7 @@ class RealExporter:
         'self_bleu4': 'SBL4',
         'self_bleu5': 'SBL5',
 
-        # 'fbd': 'FBD',
-        # 'embd': 'W2BD',
+        'fbd': 'FBD',
         '-nll': 'NLL',
     }
     datasets = {
@@ -47,19 +46,19 @@ class RealExporter:
         "imdb30": "IMDB Movie Reviews",
         "chpoem5": "Chinese Poem",
     }
-    metric_names = ["NLL" "FBD"]  # , "W2BD"]
+    metric_names = ["NLL", "FBD"]  # , "W2BD"]
     metric_names += ["MSJ%d" % i for i in range(2, 6)]
     metric_names += ["BL%d" % i for i in range(2, 6)]
     metric_names += ["SBL%d" % i for i in range(2, 6)]
-    column_pattern = [1, 4, 4, 4]
+    column_pattern = [1, 1, 4, 4, 4]
 
 
 class OracleExporter:
     metrics = {
         "jeffreys": "Jeff",
-        "bhattacharyya": "Bhatta",
-        "lnp_fromq": "O-NLL",
-        "lnq_fromp": "NLL",
+        "bhattacharyya": "Bhattacharyya",
+        "lnpfromq": "Oracle-NLL",
+        "lnqfromp": "NLL",
 
         'jaccard2': 'MSJ2',
         'jaccard3': 'MSJ3',
@@ -79,16 +78,17 @@ class OracleExporter:
     datasets = {
         "oracle75": "Oracle",
     }
-    metric_names = ["NLL", "O-NLL", "Jeff"]
-    metric_names += ["MSJ%d" % i for i in range(2, 6)]
-    metric_names += ["BL%d" % i for i in range(2, 6)]
-    metric_names += ["SBL%d" % i for i in range(2, 6)]
-    column_pattern = [1, 4, 4, 4]
+    metric_names = ["NLL", "Oracle-NLL", "Bhattacharyya"]
+    # metric_names += ["MSJ%d" % i for i in range(2, 6)]
+    # metric_names += ["BL%d" % i for i in range(2, 6)]
+    # metric_names += ["SBL%d" % i for i in range(2, 6)]
+    column_pattern = [2, 1]
 
 
 def read_data(exporter, dataset_name, model_restore_zip, temperature):
     res = {}
     for model_name, restore_type in model_restore_zip.items():
+        temp_temperature = temperature
         res[model_name] = []
         # from evaluator import k_fold
         # for k in range(k_fold if k_fold == 3 else 3):
@@ -103,9 +103,10 @@ def read_data(exporter, dataset_name, model_restore_zip, temperature):
         else:
             raise BaseException('Invalid dataset!! :)')
         if model_name == 'real':
-            temperature = {'value': None}
+            temp_temperature = {'value': None}
+        print("{} {} k{} t {}".format(dataset_name, model_name, k, temp_temperature))
         dumper = Dumper(create_model(model_name, None), k, dataset_name)
-        res[model_name].append(dumper.load_final_results(restore_type, temperature))
+        res[model_name].append(dumper.load_final_results(restore_type, temp_temperature))
     new_res = {}
     for model_name in model_restore_zip:
         new_res[model_name] = {}
@@ -113,10 +114,8 @@ def read_data(exporter, dataset_name, model_restore_zip, temperature):
             values = np.array([res[model_name][k][metric] for k in range(len(res[model_name]))])
             if metric.startswith('-nll'):
                 values *= -1
-            elif metric.startswith('bleu'):
-                values = 1 - values
-            elif metric.startswith('jaccard'):
-                values = 1 - values
+            elif metric.startswith('ln'):
+                values *= -1
             if len(res[model_name]) > 1:
                 new_res[model_name][exporter.metrics[metric]] = {'mean': np.mean(values), 'std': np.std(values)}
             else:
@@ -136,13 +135,13 @@ def export_tables(training_mode, dataset_name, model_restore_zip, temperature):
         model_names = [m for m in model_restore_zip.keys() if m != 'real']
         mu = np.array([res[model_name][metric_name]['mean'] for model_name in model_names])
         # nll is ll!
-        # if re.match('^(BL.*|MSJ.*)$', metric_name) is None:
-        #     mu *= -1.
+        if re.match('^(BL.*|MSJ.*)$', metric_name):
+            mu *= -1.
         best_model[metric_name] = model_names[int(np.argmin(mu))]
     old_dataset_name = dataset_name
     dataset_name = exporter.datasets[dataset_name]
     caption = make_caption(dataset_name)
-    tbl = TblGenerator(["Method"] + list(map(lambda x: "%s" % x, exporter.metric_names)), caption, "scriptsize",
+    tbl = TblGenerator(["Method"] + list(map(lambda x: "%s" % x, exporter.metric_names)), caption, "small",
                        "table:%s" % (dataset_name,),
                        column_pattern=exporter.column_pattern)
     # [1, 2, 4, 4, 4])
@@ -151,7 +150,7 @@ def export_tables(training_mode, dataset_name, model_restore_zip, temperature):
             continue
         metric_results = []
         for metric_name in exporter.metric_names:
-            if metric_name == 'NLL' and model_name == 'real':
+            if 'NLL' in metric_name and model_name == 'real':
                 s = "-"
                 metric_results.append(s)
             elif 'std' in res[model_name][metric_name]:

@@ -146,11 +146,11 @@ elif args.action == 'legacy':
     convert_legacies()
 elif args.action == 'export':
     from export_utils.evaluation_exporter import export_tables
-    from export_utils.histogram_exporter import export_histogram
-
-    export_tables(args.mode, dataset_prefix_name, model_restore_zip)
-    for k in args.k:
-        export_histogram(args.mode, dataset_prefix_name, model_restore_zip, k)
+    for temperature in args.temperatures:
+        export_tables(args.mode, dataset_prefix_name, model_restore_zip, temperature)
+        # for k in args.k:
+        # from export_utils.histogram_exporter import export_histogram
+        #     export_histogram(args.mode, dataset_prefix_name, model_restore_zip, k)
 elif args.action == 'dump':
     assert args.k is not None
     parser = ParserClass(name=dataset_prefix_name + '-words')
