@@ -20,20 +20,20 @@ model_name_orders = ['real', 'mle', 'newmle', 'seqgan', 'maligan', 'rankgan', 't
 
 class RealExporter:
     metrics = {
-        'jaccard2': 'MSJ-2',
-        'jaccard3': 'MSJ-3',
-        'jaccard4': 'MSJ-4',
-        'jaccard5': 'MSJ-5',
+        'jaccard2': 'MSJ2',
+        'jaccard3': 'MSJ3',
+        'jaccard4': 'MSJ4',
+        'jaccard5': 'MSJ5',
 
-        'bleu2': 'BL-2',
-        'bleu3': 'BL-3',
-        'bleu4': 'BL-4',
-        'bleu5': 'BL-5',
+        'bleu2': 'BL2',
+        'bleu3': 'BL3',
+        'bleu4': 'BL4',
+        'bleu5': 'BL5',
 
-        'self_bleu2': 'SBL-2',
-        'self_bleu3': 'SBL-3',
-        'self_bleu4': 'SBL-4',
-        'self_bleu5': 'SBL-5',
+        'self_bleu2': 'SBL2',
+        'self_bleu3': 'SBL3',
+        'self_bleu4': 'SBL4',
+        'self_bleu5': 'SBL5',
 
         # 'fbd': 'FBD',
         # 'embd': 'W2BD',
@@ -47,37 +47,76 @@ class RealExporter:
         "imdb30": "IMDB Movie Reviews",
         "chpoem5": "Chinese Poem",
     }
-    metric_names = ["NLL"]  # , "FBD", "W2BD"]
-    metric_names += ["MSJ-%d" % i for i in range(2, 6)]
-    metric_names += ["BL-%d" % i for i in range(2, 6)]
-    metric_names += ["SBL-%d" % i for i in range(2, 6)]
-    # metric_names = [mm for mm in metric_names if mm in metrics.values()]
+    metric_names = ["NLL" "FBD"]  # , "W2BD"]
+    metric_names += ["MSJ%d" % i for i in range(2, 6)]
+    metric_names += ["BL%d" % i for i in range(2, 6)]
+    metric_names += ["SBL%d" % i for i in range(2, 6)]
+    column_pattern = [1, 4, 4, 4]
 
 
 class OracleExporter:
     metrics = {
-        "jeffreys": "Jeffreys",
-        "bhattacharyya": "Bhattacharyya",
-        "lnp_fromq": "OracleNLL",
+        "jeffreys": "Jeff",
+        "bhattacharyya": "Bhatta",
+        "lnp_fromq": "O-NLL",
         "lnq_fromp": "NLL",
+
+        'jaccard2': 'MSJ2',
+        'jaccard3': 'MSJ3',
+        'jaccard4': 'MSJ4',
+        'jaccard5': 'MSJ5',
+
+        'bleu2': 'BL2',
+        'bleu3': 'BL3',
+        'bleu4': 'BL4',
+        'bleu5': 'BL5',
+
+        'self_bleu2': 'SBL2',
+        'self_bleu3': 'SBL3',
+        'self_bleu4': 'SBL4',
+        'self_bleu5': 'SBL5',
     }
+    datasets = {
+        "oracle75": "Oracle",
+    }
+    metric_names = ["NLL", "O-NLL", "Jeff"]
+    metric_names += ["MSJ%d" % i for i in range(2, 6)]
+    metric_names += ["BL%d" % i for i in range(2, 6)]
+    metric_names += ["SBL%d" % i for i in range(2, 6)]
+    column_pattern = [1, 4, 4, 4]
 
 
-def read_data(exporter, dataset_name, model_restore_zip):
-    from evaluator import k_fold
+def read_data(exporter, dataset_name, model_restore_zip, temperature):
     res = {}
     for model_name, restore_type in model_restore_zip.items():
         res[model_name] = []
-        for k in range(k_fold if k_fold == 3 else 3):
-            dumper = Dumper(create_model(model_name, None), k, dataset_name)
-            res[model_name].append(dumper.load_final_results(restore_type))
+        # from evaluator import k_fold
+        # for k in range(k_fold if k_fold == 3 else 3):
+        if dataset_name.startswith('oracle'):
+            k = 0
+        elif dataset_name.startswith('imdb'):
+            k = 2
+        elif dataset_name.startswith('emnlp'):
+            k = 1
+        elif dataset_name.startswith('coco'):
+            k = 1
+        else:
+            raise BaseException('Invalid dataset!! :)')
+        if model_name == 'real':
+            temperature = {'value': None}
+        dumper = Dumper(create_model(model_name, None), k, dataset_name)
+        res[model_name].append(dumper.load_final_results(restore_type, temperature))
     new_res = {}
     for model_name in model_restore_zip:
         new_res[model_name] = {}
         for metric in exporter.metrics:
             values = np.array([res[model_name][k][metric] for k in range(len(res[model_name]))])
-            if metric == '-nll':
+            if metric.startswith('-nll'):
                 values *= -1
+            elif metric.startswith('bleu'):
+                values = 1 - values
+            elif metric.startswith('jaccard'):
+                values = 1 - values
             if len(res[model_name]) > 1:
                 new_res[model_name][exporter.metrics[metric]] = {'mean': np.mean(values), 'std': np.std(values)}
             else:
@@ -86,9 +125,9 @@ def read_data(exporter, dataset_name, model_restore_zip):
     return res
 
 
-def export_tables(training_mode, dataset_name, model_restore_zip):
+def export_tables(training_mode, dataset_name, model_restore_zip, temperature):
     exporter = RealExporter if training_mode == 'real' else OracleExporter
-    res = read_data(exporter, dataset_name, model_restore_zip)
+    res = read_data(exporter, dataset_name, model_restore_zip, temperature)
 
     best_model = {x: None for x in exporter.metric_names}
 
@@ -97,15 +136,15 @@ def export_tables(training_mode, dataset_name, model_restore_zip):
         model_names = [m for m in model_restore_zip.keys() if m != 'real']
         mu = np.array([res[model_name][metric_name]['mean'] for model_name in model_names])
         # nll is ll!
-        if re.match('^(FBD|W2BD|NLL|SBL.*)$', metric_name):
-            mu *= -1.
-        best_model[metric_name] = model_names[int(np.argmax(mu))]
+        # if re.match('^(BL.*|MSJ.*)$', metric_name) is None:
+        #     mu *= -1.
+        best_model[metric_name] = model_names[int(np.argmin(mu))]
     old_dataset_name = dataset_name
     dataset_name = exporter.datasets[dataset_name]
     caption = make_caption(dataset_name)
     tbl = TblGenerator(["Method"] + list(map(lambda x: "%s" % x, exporter.metric_names)), caption, "scriptsize",
                        "table:%s" % (dataset_name,),
-                       [1, 4, 4, 4])
+                       column_pattern=exporter.column_pattern)
     # [1, 2, 4, 4, 4])
     for model_name in model_name_orders:
         if model_name not in model_restore_zip:
