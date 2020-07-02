@@ -35,13 +35,17 @@ def exists(file_name, prefix=OBJ_fILES_PATH):
     return os.path.exists(prefix + file_name)
 
 
-def dump(obj, file_name):
-    with open(OBJ_fILES_PATH + file_name, 'wb') as file:
+def dump(obj, file_name, parent_path=''):
+    if parent_path == '':
+        parent_path = OBJ_fILES_PATH
+    with open(parent_path + file_name, 'wb') as file:
         pickle.dump(obj, file, pickle.HIGHEST_PROTOCOL)
 
 
-def load(file_name):
-    with open(OBJ_fILES_PATH + file_name, 'rb') as file:
+def load(file_name, parent_path=''):
+    if parent_path == '':
+        parent_path = OBJ_fILES_PATH
+    with open(parent_path + file_name, 'rb') as file:
         return pickle.load(file)
 
 

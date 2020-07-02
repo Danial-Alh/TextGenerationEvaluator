@@ -1,8 +1,11 @@
 import os
 import re
+import sys
 
-root_path = './previous_works/textgan2'
+root_path = './previous_works/{}'.format(sys.argv[1])
 
+print(root_path)
+input('continue?')
 
 def refactor_file_imports(path, import_level):
     with open(path, 'r', encoding='utf8') as file:
@@ -20,9 +23,9 @@ def refactor_file_imports(path, import_level):
                 for prefix in root_folders:
                     if after_import.startswith(prefix):
                         lines[i] = line.replace('import', 'from %s import' % import_level)
-        elif re.match('^\s*\sprint\s+', line) is not None:
-            lines[i] = re.sub('^\s*\sprint\s+', '?1', line) + ')'
-            lines[i] = re.sub('\sprint\s+', '\g<0>(', line) + ')'
+        elif re.match(r'^\s*\sprint\s+', line) is not None:
+            lines[i] = re.sub(r'^\s*\sprint\s+', r'?1', line) + ')'
+            lines[i] = re.sub(r'\sprint\s+', r'\g<0>(', line) + ')'
         elif 'xrange' in line:
             lines[i] = re.sub('xrange\s*\(', 'range(', line)
     with open(path, 'w', encoding='utf8') as file:
