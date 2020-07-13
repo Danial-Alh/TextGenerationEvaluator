@@ -2,8 +2,6 @@ from functools import reduce
 
 from evaluators.best_model_tracker import BestModelTracker
 from evaluators.model_dumper import ModelDumper
-from evaluators.oracle_evaluator import OracleEvaluator
-from evaluators.real_evaluator import RealWorldEvaluator
 from db_management.models import ModelSamples
 from previous_works import create_model
 from previous_works.model_wrappers.base_model import BaseModel

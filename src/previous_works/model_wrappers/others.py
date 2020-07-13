@@ -27,7 +27,7 @@ class LeakGan(BaseModel):
 
     def train(self):
         self.model.train()
-        self.tracker.update_scores(last_iter=True)
+        self.tracker.update_metrics(last_iter=True)
 
     @empty_sentence_remover_decorator
     def generate_samples(self, n_samples, temperature):
@@ -86,7 +86,7 @@ class TextGan(BaseModel):
         train_model(self.train_data, self.valid_data, self.valid_data, None, None, None, self.parser.id2vocab,
                     self.parser.vocab.shape[0], self.parser.END_TOKEN_ID)
         # self.model.train_func(self.train_data, self.valid_data)
-        # self.tracker.update_scores(last_iter=True)
+        # self.tracker.update_metrics(last_iter=True)
 
     @empty_sentence_remover_decorator
     def generate_samples(self, n_samples, temperature):

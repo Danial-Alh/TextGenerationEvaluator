@@ -54,10 +54,10 @@ class BaseModel:
         #     delete_file(self.valid_loc)
         pass
 
-    def update_scores(self, epoch_num):
+    def update_metrics(self, epoch_num):
         print('evaluator called %d!' % epoch_num)
         assert self.tracker is not None, 'Evaluator is none!'
-        self.tracker.update_scores(epoch_num)
+        self.tracker.update_metrics(epoch_num)
 
     def set_tracker(self, dumper):
         self.tracker = dumper

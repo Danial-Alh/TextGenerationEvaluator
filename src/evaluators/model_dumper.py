@@ -5,7 +5,7 @@ import numpy as np
 from db_management.models import (InTrainingEvaluationHistory,
                                   MetricHistoryRecord, MetricResult,
                                   ModelEvaluationResult, ModelSamples)
-from mongodb_management.models import MetricResult, Sample
+from db_management.models import MetricResult, Sample
 from utils.file_handler import (create_folder_if_not_exists, dump_json,
                                 load_json, read_text, unzip_file, write_text,
                                 zip_folder)

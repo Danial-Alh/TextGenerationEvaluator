@@ -4,7 +4,7 @@ from torchtext.data import ReversibleField
 from metrics.bert_distances import EMBD, FBD
 from metrics.bleus import Bleu, SelfBleu
 from metrics.multiset_distances import MultisetDistances
-from mongodb_management.models import ModelSamples
+from db_management.models import ModelSamples
 from previous_works.model_wrappers.base_model import BaseModel
 
 from .base_evaluator import Evaluator

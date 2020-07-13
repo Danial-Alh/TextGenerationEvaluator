@@ -48,7 +48,7 @@ class TexyGen(BaseModel):
 
     def train(self):
         self.model.train_real(self.train_loc, self)
-        self.tracker.update_scores(last_iter=True)
+        self.tracker.update_metrics(last_iter=True)
 
     @empty_sentence_remover_decorator
     def generate_samples(self, n_samples, temperature):

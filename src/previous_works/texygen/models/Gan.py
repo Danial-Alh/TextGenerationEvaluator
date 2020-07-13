@@ -64,7 +64,7 @@ class Gan:
             print('time elapsed of ' + metric.get_name() + ': ' + str(toc - tic))
             scores.append(score)
         print(log)
-        self.wrapper.update_scores(self.epoch)
+        self.wrapper.update_metrics(self.epoch)
         return scores
 
     def init_real_metric(self):

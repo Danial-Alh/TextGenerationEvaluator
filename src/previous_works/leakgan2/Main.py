@@ -207,7 +207,7 @@ class LeakGanMain:
                     buffer = 'epoch:\t' + str(epoch) + '\tnll:\t' + str(loss) + '\n'
                     log.write(buffer)
                     self.saver.save(self.sess, model_path + '/leakgan_pre')
-                    self.dumper.update_scores(epoch)
+                    self.dumper.update_metrics(epoch)
             else:
                 print('Start pre-training discriminator...')
                 # Train 3 epoch on the generated data and do this for 50 times
@@ -240,7 +240,7 @@ class LeakGanMain:
                     for epoch in range(PRE_EPOCH_NUM // 16):
                         loss = pre_train_epoch(self.sess, self.leakgan, self.gen_data_loader)
                         if epoch % 5 == 0:
-                            self.dumper.update_scores(epoch)
+                            self.dumper.update_metrics(epoch)
                             self.generate_samples(generated_num, negative_file, 0)
                         print('pre-train epoch ', epoch, 'test_loss ', loss)
                         buffer = 'epoch:\t' + str(epoch) + '\tnll:\t' + str(loss) + '\n'
@@ -274,7 +274,7 @@ class LeakGanMain:
                                       0)
                 # self.saver.save(self.sess, model_path + '/leakgan', global_step=total_batch)
                 self.saver.save(self.sess, model_path + '/leakgan')
-                self.dumper.update_scores(PRE_EPOCH_NUM + total_batch)
+                self.dumper.update_metrics(PRE_EPOCH_NUM + total_batch)
 
             if total_batch % 15 == 0:
                 for epoch in range(1):
