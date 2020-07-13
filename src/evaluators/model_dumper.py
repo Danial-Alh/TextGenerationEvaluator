@@ -1,9 +1,15 @@
 import os
 
+import numpy as np
+
+from db_management.models import (InTrainingEvaluationHistory,
+                                  MetricHistoryRecord, MetricResult,
+                                  ModelEvaluationResult, ModelSamples)
+from mongodb_management.models import MetricResult, Sample
 from utils.file_handler import (create_folder_if_not_exists, dump_json,
                                 load_json, read_text, unzip_file, write_text,
                                 zip_folder)
-from utils.path_configs import EXPORT_PATH, MODEL_PATH
+from utils.path_configs import COMPUTER_NAME, EXPORT_PATH, MODEL_PATH
 
 from .base_evaluator import BaseModel
 
@@ -33,58 +39,102 @@ class ModelDumper:
               (self.k, key, self.model.get_name()))
         self.model.load()
 
-    def dump_generated_samples(self, samples, load_key, temperature):
-        if not isinstance(samples[0], str):
-            samples = [" ".join(s) for s in samples]
-        write_text(samples, os.path.join(self.saving_path, self.get_temperature_stringified(temperature) + '_' +
-                                         load_key + '_based_samples.txt'), is_complete_path=True)
+    def init_history(self):
+        InTrainingEvaluationHistory.objects(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k,
+            best_history=[], all_history=[]
+        ).save()
 
-    def load_generated_samples(self, load_key, temperature):
-        return read_text(os.path.join(self.saving_path, self.get_temperature_stringified(temperature) + '_' +
-                                      load_key + '_based_samples.txt'), is_complete_path=True)
+    def append_to_best_history(self, new_metrics):
+        model_history = InTrainingEvaluationHistory.objects(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k,
+        ).get()
 
-    def get_generated_samples_path(self, load_key, temperature):
-        return os.path.join(self.saving_path, self.get_temperature_stringified(temperature) + '_' +
-                            load_key + '_based_samples.txt')
+        for metric, value in new_metrics.items():
+            model_history.best_history[metric].append(MetricHistoryRecord(**value))
 
-    def dump_best_history(self, best_history):
-        dump_json(best_history, 'best_history', self.saving_path)
+        model_history.save()
 
-    def dump_samples_with_supplementary_info(self, dumping_object: dict, load_key, sample_label, temperature):
-        print({"#" + key: len(value) for key, value in dumping_object.items()})
-        dump_json(
-            [
-                {key: value[i] for key, value in dumping_object.items()}
-                for i in range(len(dumping_object['sentence']))
-            ],
-            sample_label + self.get_temperature_stringified(temperature) + '_' +
-            load_key + '_based_samples', self.saving_path
+    def append_to_history(self, new_metrics):
+        model_history = InTrainingEvaluationHistory.objects(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k,
+        ).get()
+
+        for metric, value in new_metrics.items():
+            model_history.all_history[metric].append(MetricHistoryRecord(**value))
+
+        model_history.save()
+
+    def dump_samples_with_persample_metrics(self, dumping_object: dict, restore_type, temperature):
+        def convert_dmpobj_to_db_sample(dmp_obj):
+            return [
+                Sample(
+                    sentence=dmp_obj['sentence'],
+                    tokens=dmp_obj['tokens'],
+                    metrics={key: MetricResult(value=value[i])
+                             for key, value in dmp_obj.items() if key not in ['sentence', 'tokens']}
+                )
+                for i in range(len(dmp_obj['sentence']))
+            ]
+
+        model_samples = ModelSamples(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            temperature=self.get_temperature_stringified(temperature),
+            generated_samples=convert_dmpobj_to_db_sample(dumping_object['gen']),
+            test_samples=convert_dmpobj_to_db_sample(dumping_object['test'])
         )
 
-    def load_samples_with_supplementary_info(self, load_key, sample_label, temperature):
-        result = load_json(
-            sample_label +
-            self.get_temperature_stringified(temperature) + '_' + load_key + '_based_samples',
-            self.saving_path)
+        model_samples.save()
+
+    def update_persample_metrics_for_generated_samples(self, dumping_object: dict, restore_type, temperature):
+        model_samples = ModelSamples.objects(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            temperature=self.get_temperature_stringified(temperature),
+        ).get()
+
+        for metric in dumping_object:
+            if isinstance(dumping_object[metric], dict):
+                ids = dumping_object[metric]['ids']
+                values = dumping_object[metric]['values']
+            else:
+                ids = np.arange(len(dumping_object[metric]))
+                values = dumping_object[metric]
+                assert len(dumping_object[metric]) == len(model_samples.generated_samples)
+            for i, v in zip(ids, values):
+                model_samples.generated_samples[i].metrics[metric] = MetricResult(value=v)
+
+        model_samples.save()
+
+    def load_samples_with_persample_metrics(self, restore_type, temperature):
+        result = ModelSamples.objects(
+            model_name=self.model.get_name(), dataset_name=self.dm_name,
+            run=self.k, restore_type=restore_type,
+            temperature=self.get_temperature_stringified(temperature)).get()
         return result
 
-    def dump_final_results(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + self.get_temperature_stringified(temperature) +
-                  '_' + restore_type + 'restore', self.final_result_parent_path)
+    def dump_final_evaluation_results(self, dumping_object: dict, restore_type, temperature):
+        evaluation_result = ModelEvaluationResult(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            temperature=self.get_temperature_stringified(temperature),
+        )
 
-    def load_final_results(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + self.get_temperature_stringified(temperature) +
-                         '_' + restore_type + 'restore', self.final_result_parent_path)
+        for metric, value in dumping_object.items():
+            evaluation_result.metrics[metric] = MetricResult(value)
 
-    def dump_final_results_details(self, results, restore_type, temperature):
-        dump_json(results, self.final_result_file_name + self.get_temperature_stringified(temperature)
-                  + '_' + restore_type + 'restore_details',
-                  self.final_result_parent_path)
+        evaluation_result.save()
 
-    def load_final_results_details(self, restore_type, temperature):
-        return load_json(self.final_result_file_name + self.get_temperature_stringified(temperature)
-                         + '_' + restore_type + 'restore_details',
-                         self.final_result_parent_path)
+    def load_final_evaluation_results(self, restore_type, temperature):
+        return ModelEvaluationResult.objects(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            temperature=self.get_temperature_stringified(temperature),
+        ).get()
 
     @staticmethod
     def get_temperature_stringified(temperature):

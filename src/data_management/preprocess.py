@@ -1,11 +1,8 @@
-import io
-
 import numpy as np
-import torchtext
 from pandas import read_csv
-from torchtext.data import Field, ReversibleField, TabularDataset
+from torchtext.data import ReversibleField
 
-from utils.file_handler import dump, load, read_text, write_text
+from utils.file_handler import dump, read_text, write_text
 from utils.path_configs import DATASET_PATH
 
 from data_management.data_manager import LanguageModelingDataset
@@ -36,14 +33,13 @@ def split_train_into_train_valid(dataset_name):
         "{}_train".format(dataset_name),\
         "{}_valid".format(dataset_name),\
         "{}_test".format(dataset_name)
-    
+
     all_lines = read_text(source_filename)
     test_size = len(read_text(test_filename))
-    
-    
+
     valid_ids = set(np.random.choice(np.arange(len(all_lines)), test_size, replace=False))
     train_ids = [i for i in np.arange(len(all_lines)) if i not in valid_ids]
-    valid_ids = list(valid_ids)    
+    valid_ids = list(valid_ids)
 
     train_lines = all_lines[train_ids]
     valid_lines = all_lines[valid_ids]
@@ -74,17 +70,14 @@ def preprocess_real_dataset(dataset_name):
         # fix_length=MAX_LENGTH
     )
 
-    trn = LanguageModelingDataset(
-        path=DATASET_PATH + train_filename,
-        text_field=TEXT)
+    trn = LanguageModelingDataset(path=DATASET_PATH + train_filename,
+                                  newline_eos=False, text_field=TEXT)
 
-    vld = LanguageModelingDataset(
-        path=DATASET_PATH + valid_filename,
-        text_field=TEXT)
+    vld = LanguageModelingDataset(path=DATASET_PATH + valid_filename,
+                                  newline_eos=False, text_field=TEXT)
 
-    tst = LanguageModelingDataset(
-        path=DATASET_PATH + test_filename,
-        text_field=TEXT)
+    tst = LanguageModelingDataset(path=DATASET_PATH + test_filename,
+                                  newline_eos=False, text_field=TEXT)
 
     TEXT.build_vocab(trn, vld, tst)
 
@@ -172,16 +165,25 @@ def preprocess_oracle_dataset():
 if __name__ == '__main__':
 
     def test_real_dataset():
-        DATASET_NAME = "coco"
+        # DATASET_NAME = "coco"
+        DATASET_NAME = "news"
+        # DATASET_NAME = "ptb"
+        # DATASET_NAME = "amazon_app_book"
+        # DATASET_NAME = "yelp_restaurant"
+
         train_ds, valid_ds, test_ds, TEXT = preprocess_real_dataset(DATASET_NAME)
 
-        print(next(iter(test_ds.text)))
-        import numpy as np
+        print('<sos>', TEXT.vocab.stoi['<sos>'])
+        print('<eos>', TEXT.vocab.stoi['<eos>'])
+        print('<pad>', TEXT.vocab.stoi['<pad>'])
 
-        tmp = []
-        for x in train_ds.text:
-            tmp.append(len(x))
-        print("mean length: {}".format(np.mean(tmp)))
+        s = next(iter(test_ds.text))
+        s_id = TEXT.numericalize([s])
+        print(s)
+        print(s_id)
+
+        lens = [len(x) for x in train_ds.text]
+        print("mean length: {}".format(np.mean(lens)))
 
     def test_oracle_dataset():
         train_ds, valid_ds, test_ds, TEXT = preprocess_oracle_dataset()
@@ -200,6 +202,7 @@ if __name__ == '__main__':
         convert_csv_to_txt(DATASET_NAME)
         split_train_into_train_valid(DATASET_NAME)
         preprocess_real_dataset(DATASET_NAME)
+
     # test_oracle_dataset()
-    # test_real_dataset()
-    convert_legacy_datasets()
+    test_real_dataset()
+    # convert_legacy_datasets()

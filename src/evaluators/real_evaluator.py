@@ -4,6 +4,7 @@ from torchtext.data import ReversibleField
 from metrics.bert_distances import EMBD, FBD
 from metrics.bleus import Bleu, SelfBleu
 from metrics.multiset_distances import MultisetDistances
+from mongodb_management.models import ModelSamples
 from previous_works.model_wrappers.base_model import BaseModel
 
 from .base_evaluator import Evaluator
@@ -61,33 +62,41 @@ class RealWorldEvaluator(Evaluator):
         lnqfromq = model.get_persample_ll(self.temperature, dumping_object['gen']['tokens'])
         return {'gen': {'lnq': lnqfromq}, 'test': {'lnq': lnqfromp}}
 
-    def get_test_scores(self, dumped_object_for_generated_samples, dumped_object_for_ref_samples):
-        generated_tokens = [r['tokens'] for r in dumped_object_for_generated_samples]
+    def get_test_scores(self, samples: ModelSamples):
+        # generated_tokens = [r.tokens for r in samples.generated_samples]
+        generated_sentences = [r.sentence for r in samples.generated_samples]
 
         if self.selfbleu_n_sampling == -1:
-            subsampled_tokens = generated_tokens
-            subsamples_mask = np.arange(len(generated_tokens))
+            subsampled_sentences = generated_sentences
+            subsamples_mask = np.arange(len(generated_sentences))
         else:
-            subsamples_mask = np.random.choice(np.arange(len(generated_tokens)),
+            subsamples_mask = np.random.choice(np.arange(len(generated_sentences)),
                                                self.selfbleu_n_sampling, replace=False)
-            subsampled_tokens = np.array(generated_tokens)[subsamples_mask].tolist()
+            subsampled_sentences = np.array(generated_sentences)[subsamples_mask].tolist()
 
-        bleu_result = self.bleu.get_score(generated_tokens)
-        selfbleu_result = SelfBleu(subsampled_tokens, 2, 5, self.parser, parse=False).get_score()
+        bleu_result = self.bleu.get_score(generated_sentences)[1]
+        selfbleu_result = SelfBleu(subsampled_sentences, 2, 5, self.parser, parse=False)\
+            .get_score()[1]
+        jaccard_result = self.multiset_distances.get_score('jaccard', generated_sentences)
+        fbd_result = self.fbd.get_score(generated_sentences)
+        embd_result = self.embd.get_score(generated_sentences)
 
         persample_scores = {
-            '-nll': [r['lnq'] for r in dumped_object_for_ref_samples],
+            '-nll': [r.metrics['lnq'] for r in samples.test_samples],
+        }
+        mean_scores = {
+            **{
+                'fbd': fbd_result,
+                'embd': embd_result
+            },
+            **{jaccard_result}
         }
 
-        for i, v in bleu_result[1].items():
+        for i, v in bleu_result.items():
             persample_scores['bleu{}'.format(i)] = v
 
-        for i, v in selfbleu_result[1].items():
-            persample_scores['selfbleu{}'.format(i)] = v
-            persample_scores['subselfbleu{}'.format(i)] = list(np.array(v)[subsamples_mask])
-
-        # scores_mean = {**self.fbd_embd.get_score(sample_lines), **self.multiset_distances.get_score(sample_tokens)}
-        mean_scores = self.multiset_distances.get_score('jaccard', generated_tokens)
+        for i, v in selfbleu_result.items():
+            persample_scores['selfbleu{}'.format(i)] = {'ids': subsamples_mask, 'values': v}
 
         for key in persample_scores:
             mean_scores[key] = np.mean(persample_scores[key])

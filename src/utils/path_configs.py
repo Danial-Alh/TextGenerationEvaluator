@@ -1,7 +1,9 @@
 # ROOT_PATH = '/home/danial/PycharmProjects/PoemNonPoemDiscriminator/'
 import inspect
-
+import platform
 import os
+
+COMPUTER_NAME = platform.node()
 
 ROOT_PATH = os.path.abspath(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/../../') + '/'
 
