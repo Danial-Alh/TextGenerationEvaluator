@@ -39,8 +39,8 @@ class MultisetDistances(BaseMetric):
         all_counters = [Counter([x for y in get_ngrams(sentences, n + 1) for x in y])
                         for n in range(self.max_n)]
         for n_counter in all_counters:
-            for k in n_counter.keys():
-                n_counter[k] /= samples_size
+            for run in n_counter.keys():
+                n_counter[run] /= samples_size
         return all_counters
 
     def get_ngram_stuff(self, sentences):

@@ -25,7 +25,7 @@ class Bleu(BaseMetric):
             samples = self.parser.reverse(samples)
         samples = [self.parser.tokenize(r) for r in samples]
         scores = self.bleu.get_score(samples)
-        return {k: np.mean(scores[k]) for k in scores.keys()}, scores
+        return {run: np.mean(scores[run]) for run in scores.keys()}, scores
 
 
 class SelfBleu(BaseMetric):
@@ -45,4 +45,4 @@ class SelfBleu(BaseMetric):
 
     def get_score(self):
         scores = self.selfbleu.get_score()
-        return {k: np.mean(scores[k]) for k in scores.keys()}, scores
+        return {run: np.mean(scores[run]) for run in scores.keys()}, scores

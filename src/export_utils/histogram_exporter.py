@@ -30,7 +30,7 @@ class RealExporter:
         'self_bleu4': 'SBL-4',
         'self_bleu5': 'SBL-5',
 
-        '-nll': 'NLL',
+        'nll': 'NLL',
     }
     datasets = {
         "coco60": "COCO Captions",
@@ -49,12 +49,12 @@ class OracleExporter:
     metrics = {
         "jeffreys": "Jeffreys",
         "bhattacharyya": "Bhattacharyya",
-        "lnp_fromq": "OracleNLL",
-        "lnq_fromp": "NLL",
+        "nllp_fromq": "OracleNLL",
+        "nllq_fromp": "NLL",
     }
 
 
-def export_histogram(training_mode, dataset_name, model_restore_zip, k):
+def export_histogram(training_mode, dataset_name, model_run_restore_zip, run):
     return
     exporter = RealExporter if training_mode == 'real' else OracleExporter
     for i, metric_name in enumerate(exporter.metrics):
@@ -62,10 +62,10 @@ def export_histogram(training_mode, dataset_name, model_restore_zip, k):
             continue
         plt.figure()
         plt.title('{} - {}'.format(exporter.datasets[dataset_name], exporter.metrics[metric_name]))
-        for model_name, restore_type in model_restore_zip.items():
-            if model_name == 'real' and metric_name == '-nll':
+        for model_name, restore_type in model_run_restore_zip.items():
+            if model_name == 'real' and metric_name == 'nll':
                 continue
-            x = Dumper(create_model(model_name, None), k, dataset_name).load_final_results_details(restore_type)
+            x = Dumper(create_model(model_name, None), run, dataset_name).load_final_results_details(restore_type)
             x = x[metric_name]
             if metric_name.lower().startswith('bleu'):
                 sns.kdeplot(x, bw=.2, label=new_model_name[model_name], cut=0)
@@ -83,12 +83,12 @@ def export_histogram(training_mode, dataset_name, model_restore_zip, k):
         # plt.title('{} - {}-{}'.format(exporter.datasets[dataset_name],
         #                                    exporter.metrics[metric_name], exporter.metrics[y_label]))
         # sns.set(style="white", color_codes=True)
-        for model_name, restore_type in model_restore_zip.items():
+        for model_name, restore_type in model_run_restore_zip.items():
             plt.figure()
             plt.title('{} - {} - {}-{}'.format(exporter.datasets[dataset_name], new_model_name[model_name],
                                                exporter.metrics[metric_name], exporter.metrics[y_label]))
             sns.set(style="white", color_codes=True)
-            x = Dumper(create_model(model_name, None), k, dataset_name).load_final_results_details(restore_type)
+            x = Dumper(create_model(model_name, None), run, dataset_name).load_final_results_details(restore_type)
             x, y = np.array(x[x_label]), np.array(x[y_label])
             assert x.shape == y.shape
             x, y = x[:2000], y[:2000]

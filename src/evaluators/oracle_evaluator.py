@@ -2,9 +2,9 @@
 class OracleEvaluator(Evaluator):
     test_restore_types = ['-nll_oracle', 'last_iter']
 
-    def __init__(self, train_data, valid_data, test_data, parser, mode, k, temperature, dm_name):
-        super().__init__(train_data, valid_data, test_data, parser, mode, k, temperature, dm_name)
-        self.selfbleu_n_sampling = selfbleu_n_s
+    def __init__(self, train_data, valid_data, test_data, parser, mode, run, temperature, dm_name):
+        super().__init__(train_data, valid_data, test_data, parser, mode, run, temperature, dm_name)
+        self.SELFBLEU_N_S = selfbleu_n_s
 
     def init_metrics(self, mode):
         if mode == 'train':
@@ -34,7 +34,7 @@ class OracleEvaluator(Evaluator):
             'bleu4': [{"value": 0.0, "epoch": -1}],
             'bleu5': [{"value": 0.0, "epoch": -1}],
             '-nll_oracle': [{"value": -np.inf, "epoch": -1}],
-            '-nll': [{"value": -np.inf, "epoch": -1}]
+            'nll': [{"value": -np.inf, "epoch": -1}]
         }
 
     def get_during_training_scores(self, model: BaseModel):
@@ -45,15 +45,15 @@ class OracleEvaluator(Evaluator):
             'bleu4': np.mean(self.bleu4.get_score(samples)),
             'bleu5': np.mean(self.bleu5.get_score(samples)),
             '-nll_oracle': np.mean(self.oracle.log_probability(new_samples)),
-            '-nll': -model.get_nll(self.temperature)
+            'nll': -model.get_nll(self.temperature)
         }
         return new_scores
 
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
         if model.get_name().lower() == 'real':
             dummy_arr = [1. for _ in range(len(test_codes))]
-            return {'gen': {'lnq': dummy_arr, 'lnp': dummy_arr},
-                    'test': {'lnq': dummy_arr, 'lnp': dummy_arr}}
+            return {'gen': {'nllq': dummy_arr, 'nllp': dummy_arr},
+                    'test': {'nllq': dummy_arr, 'nllp': dummy_arr}}
         test_lines = self.parser.id_format2line(test_codes, merge=False)
         sample_lines = self.parser.id_format2line(sample_codes, merge=False)
         test_lines = np.array([[int(x) for x in y] for y in test_lines])
@@ -61,43 +61,43 @@ class OracleEvaluator(Evaluator):
         print(test_lines.shape)
         print(sample_lines.shape)
 
-        lnqfromp = model.get_persample_ll(self.temperature, test_codes)
-        lnqfromq = model.get_persample_ll(self.temperature, sample_codes)
-        lnpfromp = self.oracle.log_probability(test_lines)
-        lnpfromq = self.oracle.log_probability(sample_lines)
-        return {'gen': {'lnq': lnqfromq, 'lnp': lnpfromq},
-                'test': {'lnq': lnqfromp, 'lnp': lnpfromp}}
+        nllqfromp = model.get_persample_nll(self.temperature, test_codes)
+        nllqfromq = model.get_persample_nll(self.temperature, sample_codes)
+        nllpfromp = self.oracle.log_probability(test_lines)
+        nllpfromq = self.oracle.log_probability(sample_lines)
+        return {'gen': {'nllq': nllqfromq, 'nllp': nllpfromq},
+                'test': {'nllq': nllqfromp, 'nllp': nllpfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):
         from metrics.divergences import Bhattacharyya, Jeffreys
         sample_lines = [r['sentence'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
 
-        if self.selfbleu_n_sampling == -1:
+        if self.SELFBLEU_N_S == -1:
             subsampled_tokens = sample_tokens
             subsamples_mask = [i for i in range(len(sample_tokens))]
         else:
             subsamples_mask = np.random.choice(
-                range(len(sample_tokens)), self.selfbleu_n_sampling, replace=False)
+                range(len(sample_tokens)), self.SELFBLEU_N_S, replace=False)
             subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
 
-        lnqfromp = np.array([r['lnq'] for r in refs_with_additional_fields])
-        lnqfromq = np.array([r['lnq'] for r in samples_with_additional_fields])
-        lnpfromp = np.array([r['lnp'] for r in refs_with_additional_fields])
-        lnpfromq = np.array([r['lnp'] for r in samples_with_additional_fields])
+        nllqfromp = np.array([r['nllq'] for r in refs_with_additional_fields])
+        nllqfromq = np.array([r['nllq'] for r in samples_with_additional_fields])
+        nllpfromp = np.array([r['nllp'] for r in refs_with_additional_fields])
+        nllpfromq = np.array([r['nllp'] for r in samples_with_additional_fields])
 
-        print(lnqfromp.shape)
-        print(lnqfromq.shape)
-        print(lnpfromp.shape)
-        print(lnpfromq.shape)
+        print(nllqfromp.shape)
+        print(nllqfromq.shape)
+        print(nllpfromp.shape)
+        print(nllpfromq.shape)
 
         self_bleu5 = SelfBleu(subsampled_tokens, weights=np.ones(5) / 5.)
 
         scores_persample = {
-            'lnqfromp': list(lnqfromp),
-            'lnqfromq': list(lnqfromq),
-            'lnpfromp': list(lnpfromp),
-            'lnpfromq': list(lnpfromq),
+            'nllqfromp': list(nllqfromp),
+            'nllqfromq': list(nllqfromq),
+            'nllpfromp': list(nllpfromp),
+            'nllpfromq': list(nllpfromq),
             'bleu2': self.bleu2.get_score(sample_tokens),
             'bleu3': self.bleu3.get_score(sample_tokens),
             'bleu4': self.bleu4.get_score(sample_tokens),
@@ -113,8 +113,8 @@ class OracleEvaluator(Evaluator):
         scores_persample['sub_bleu5'] = list(np.array(scores_persample['bleu5'])[subsamples_mask])
 
         scores_mean = {
-            'bhattacharyya': Bhattacharyya(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
-            'jeffreys': Jeffreys(lnpfromp, lnqfromp, lnpfromq, lnqfromq),
+            'bhattacharyya': Bhattacharyya(nllpfromp, nllqfromp, nllpfromq, nllqfromq),
+            'jeffreys': Jeffreys(nllpfromp, nllqfromp, nllpfromq, nllqfromq),
         }
         scores_mean = {**scores_mean, **self.multiset_distances.get_score(sample_tokens)}
         for key in scores_persample:

@@ -15,14 +15,14 @@ from .base_evaluator import BaseModel
 
 
 class ModelDumper:
-    def __init__(self, model: BaseModel, k=0, dm_name=''):
-        self.k = k
+    def __init__(self, model: BaseModel, run=0, dm_name=''):
+        self.run = run
         self.dm_name = dm_name
         self.model = model
         self.init_paths()
 
     def init_paths(self):
-        self.saving_path = MODEL_PATH + self.dm_name + '/' + self.model.get_name() + ('_run%d/' % self.k)
+        self.saving_path = MODEL_PATH + self.dm_name + '/' + self.model.get_name() + ('_run%d/' % self.run)
         create_folder_if_not_exists(self.saving_path)
         self.final_result_parent_path = os.path.join(
             EXPORT_PATH, 'evaluations_{}/'.format(self.dm_name))
@@ -36,20 +36,20 @@ class ModelDumper:
         self.model.delete_saved_model()
         unzip_file(key, self.saving_path, self.model.get_saving_path())
         print('Run %d - "%s" based "%s"; saved model restored' %
-              (self.k, key, self.model.get_name()))
+              (self.run, key, self.model.get_name()))
         self.model.load()
 
     def init_history(self):
         InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k,
+            dataset_name=self.dm_name, run=self.run,
             best_history=[], all_history=[]
         ).save()
 
     def append_to_best_history(self, new_metrics):
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k,
+            dataset_name=self.dm_name, run=self.run,
         ).get()
 
         for metric, value in new_metrics.items():
@@ -60,7 +60,7 @@ class ModelDumper:
     def append_to_history(self, new_metrics):
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k,
+            dataset_name=self.dm_name, run=self.run,
         ).get()
 
         for metric, value in new_metrics.items():
@@ -82,7 +82,7 @@ class ModelDumper:
 
         model_samples = ModelSamples(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
             generated_samples=convert_dmpobj_to_db_sample(dumping_object['gen']),
             test_samples=convert_dmpobj_to_db_sample(dumping_object['test'])
@@ -93,7 +93,7 @@ class ModelDumper:
     def update_persample_metrics_for_generated_samples(self, dumping_object: dict, restore_type, temperature):
         model_samples = ModelSamples.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
         ).get()
 
@@ -113,14 +113,14 @@ class ModelDumper:
     def load_samples_with_persample_metrics(self, restore_type, temperature):
         result = ModelSamples.objects(
             model_name=self.model.get_name(), dataset_name=self.dm_name,
-            run=self.k, restore_type=restore_type,
+            run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature)).get()
         return result
 
     def dump_final_evaluation_results(self, dumping_object: dict, restore_type, temperature):
         evaluation_result = ModelEvaluationResult(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
         )
 
@@ -132,7 +132,7 @@ class ModelDumper:
     def load_final_evaluation_results(self, restore_type, temperature):
         return ModelEvaluationResult.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.k, restore_type=restore_type,
+            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
         ).get()
 

@@ -12,7 +12,7 @@ def cosine_similarity(a, b):
 # The highway layer is borrowed from https://github.com/mkroutikov/tf-lstm-char-cnn
 def linear(input_, output_size, scope=None):
     '''
-    Linear map: output[k] = sum_i(Matrix[k, i] * input_[i] ) + Bias[k]
+    Linear map: output[run] = sum_i(Matrix[run, i] * input_[i] ) + Bias[run]
     Args:
     input_: a tensor or a list of 2D, batch x n, Tensors.
     output_size: int, second dimension of W[i].

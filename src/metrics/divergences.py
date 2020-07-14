@@ -15,19 +15,19 @@ def log1pexp(inp):
     return np.logaddexp(0., inp)
 
 
-def lndiff(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
-    # lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq = map(np.array, [lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq])
-    assert lnp_fromp.shape == lnq_fromp.shape
-    assert lnp_fromq.shape == lnq_fromq.shape
+def lndiff(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq):
+    # nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq = map(np.array, [nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq])
+    assert nllp_fromp.shape == nllq_fromp.shape
+    assert nllp_fromq.shape == nllq_fromq.shape
 
-    lndiff_p = lnp_fromp - lnq_fromp
-    lndiff_q = lnp_fromq - lnq_fromq
+    lndiff_p = nllp_fromp - nllq_fromp
+    lndiff_q = nllp_fromq - nllq_fromq
 
     return lndiff_p, lndiff_q
 
 
-def Bhattacharyya(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
-    lndiff_p, lndiff_q = lndiff(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq)
+def Bhattacharyya(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq):
+    lndiff_p, lndiff_q = lndiff(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq)
 
     res = -0.5 * (logmeanexp(0.5 * lndiff_q) + logmeanexp(-0.5 * lndiff_p))
     # res = np.exp(0.5 * lndiff1) + np.exp(-0.5 * lndiff2)
@@ -35,8 +35,8 @@ def Bhattacharyya(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
     return float(res)
 
 
-def JensenShannon(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
-    lndiff_p, lndiff_q = lndiff(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq)
+def JensenShannon(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq):
+    lndiff_p, lndiff_q = lndiff(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq)
 
     # TODO: check numerical error (https://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf)
     res = np.mean(log1pexp(lndiff_q)) + np.mean(log1pexp(-1. * lndiff_p))
@@ -47,6 +47,6 @@ def JensenShannon(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
     return np.log(2.) - 0.5 * res
 
 
-def Jeffreys(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq):
-    lndiff_p, lndiff_q = lndiff(lnp_fromp, lnq_fromp, lnp_fromq, lnq_fromq)
+def Jeffreys(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq):
+    lndiff_p, lndiff_q = lndiff(nllp_fromp, nllq_fromp, nllp_fromq, nllq_fromq)
     return np.mean(lndiff_p) - np.mean(lndiff_q)

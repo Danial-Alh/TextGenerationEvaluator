@@ -1,3 +1,5 @@
+import os
+import shutil
 from torchtext.data import ReversibleField
 
 from data_management.data_manager import load_real_dataset
@@ -9,8 +11,8 @@ def empty_sentence_remover_decorator(func):
     def wrapper(self, n_samples, *args, **kwargs):
         print('generating {} samples from {}!'.format(n_samples, self.get_name()))
         result = func(self, n_samples, *args, **kwargs)
+        result = self.parser.denumericalize(result)
         result = list(filter(lambda x: len(x) > 0, result))
-        result = self.parser.reverse(result)
         print('{} samples generated from {}!'.format(len(result), self.get_name()))
         return result
 
@@ -18,19 +20,17 @@ def empty_sentence_remover_decorator(func):
 
 
 def data2tempfile_decorator(func):
-    def wrapper(self, temperature, samples=None, samples_loc=None):
-        assert not (samples is None or samples_loc is not None)
-        file_to_be_deleted = None
-        if samples is None:
-            samples = self.valid_data
-        if samples_loc is None:
-            stringified_samples = [' '.join(map(str, s)) for s in samples]
-            samples_loc = write_text(stringified_samples, self.get_name() +
-                                     '_{}'.format(func.__name__), TEMP_PATH)
-            file_to_be_deleted = samples_loc
-        result = func(self, temperature, samples, samples_loc)
-        if file_to_be_deleted is not None:
-            delete_file(file_to_be_deleted)
+    def wrapper(self, samples, *args, **kwargs):
+        assert samples is not None
+
+        samples = self.parser.pad(samples)
+        samples = self.parser.numericalize(samples)
+
+        stringified_samples = [' '.join(map(str, s)) for s in samples.tolist()]
+        samples_loc = write_text(stringified_samples, '{}_{}'.format(self.get_name(), func.__name__),
+                                 TEMP_PATH)
+        result = func(self, samples, samples_loc, *args, **kwargs)
+        delete_file(samples_loc)
         return result
 
     return wrapper
@@ -45,7 +45,6 @@ class BaseModel:
         self.valid_data = None
         self.train_loc = None
         self.valid_loc = None
-        pass
 
     def __del__(self):
         # if self.train_loc is not None:
@@ -71,18 +70,10 @@ class BaseModel:
         self.valid_loc = write_text([' '.join(list(map(str, s))) for s in valid_data],
                                     self.get_name() + '_valid', TEMP_PATH)
 
-    def delete_saved_model(self):
-        import os
-        import shutil
-        if os.path.exists(self.get_saving_path()):
-            shutil.rmtree(self.get_saving_path())
-            os.mkdir(self.get_saving_path())
-            print("saved model at %s deleted!" % self.get_saving_path())
-
     def create_model(self):
         pass
 
-    def train(self):
+    def train(self, samples, samples_loc):
         pass
 
     @empty_sentence_remover_decorator
@@ -90,15 +81,21 @@ class BaseModel:
         pass
 
     @data2tempfile_decorator
-    def get_nll(self, temperature, samples=None, samples_loc=None):
+    def get_nll(self, samples, samples_loc, temperature):
         pass
 
     @data2tempfile_decorator
-    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
+    def get_persample_nll(self, samples, samples_loc, temperature):
         pass
 
-    def delete(self):
+    def reset_model(self):
         pass
+
+    def delete_saved_model(self):
+        if os.path.exists(self.get_saving_path()):
+            shutil.rmtree(self.get_saving_path())
+            os.mkdir(self.get_saving_path())
+            print("saved model at %s deleted!" % self.get_saving_path())
 
     def get_saving_path(self):
         pass

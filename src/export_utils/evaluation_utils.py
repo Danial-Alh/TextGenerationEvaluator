@@ -38,7 +38,7 @@ class TblGenerator:
 def change_metric_name(inp):
     metric_name_dict = {
         "embd": "W2BD",
-        "-nll": "NLL",
+        "nll": "NLL",
         "fbd": "FBD",
         "jaccard2": "MSJ-2",
         "jaccard3": "MSJ-3",
@@ -55,10 +55,10 @@ def change_metric_name(inp):
 
         "jeffreys": "Jeffreys",
         "bhattacharyya": "Bhattacharyya",
-        "lnp_fromq": "OracleNLL",
-        "lnq_fromp": "NLL",
-        "lnp_fromp": None,
-        "lnq_fromq": None
+        "nllp_fromq": "OracleNLL",
+        "nllq_fromp": "NLL",
+        "nllp_fromp": None,
+        "nllq_fromq": None
     }
     assert inp in metric_name_dict, inp
     return metric_name_dict[inp]

@@ -60,7 +60,8 @@ def load_real_dataset(dataset_name):
         text_field=TEXT)
     
     import revtok
-    TEXT.detokenize = lambda L: [revtok.detokenize(l) for l in L]
+    TEXT.detokenize = lambda B: [revtok.detokenize(l) for l in B]
+    TEXT.denumericalize = lambda B: [[TEXT.vocab.itos[ind] for ind in ex] for ex in B.tolist()]
 
     print('vocab size: {}\ntrain size: {}\n valid size: {}\n test size: {}\n max length: {}'
           .format(len(TEXT.vocab), len(trn), len(vld), len(tst), TEXT.max_length))

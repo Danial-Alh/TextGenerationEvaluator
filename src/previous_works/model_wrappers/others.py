@@ -42,7 +42,7 @@ class LeakGan(BaseModel):
         return float(score)
 
     @data2tempfile_decorator
-    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
+    def get_persample_nll(self, temperature, samples=None, samples_loc=None):
         dl = self.model_module.Gen_Data_loader(self.model_module.BATCH_SIZE, self.parser.max_length)
         dl.create_batches(samples_loc)
         score = self.model.per_sample_ll(dl)
@@ -98,7 +98,7 @@ class TextGan(BaseModel):
         return 0.0
 
     @data2tempfile_decorator
-    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
+    def get_persample_nll(self, temperature, samples=None, samples_loc=None):
         pass
 
     def get_saving_path(self):

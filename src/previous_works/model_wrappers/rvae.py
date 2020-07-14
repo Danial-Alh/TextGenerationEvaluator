@@ -95,7 +95,7 @@ class VAE(BaseModel):
         return 0.0
 
     @data2tempfile_decorator
-    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
+    def get_persample_nll(self, temperature, samples=None, samples_loc=None):
         return np.zeros(len(samples))
 
     def get_saving_path(self):

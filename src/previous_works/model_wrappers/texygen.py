@@ -43,11 +43,12 @@ class TexyGen(BaseModel):
         self.model.init_real_trainng(self.parser)
         self.load()
 
-    def set_train_val_data(self, train_data, valid_data):
-        super().set_train_val_data(train_data, valid_data)
+    # def set_train_val_data(self, train_data, valid_data):
+    #     super().set_train_val_data(train_data, valid_data)
 
-    def train(self):
-        self.model.train_real(self.train_loc, self)
+    @data2tempfile_decorator
+    def train(self, samples, samples_loc):
+        self.model.train_real(samples_loc, self)
         self.tracker.update_metrics(last_iter=True)
 
     @empty_sentence_remover_decorator
@@ -66,7 +67,7 @@ class TexyGen(BaseModel):
     def init_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.Nll import Nll
         valid_dataloader = self.dataloader_class(batch_size=self.model.batch_size,
-                                                 seq_length=self.model.sequence_length)
+                                                 seq_length=self.parser.max_length)
         valid_dataloader.create_batches(data_loc)
 
         inll = Nll(data_loader=valid_dataloader, rnn=self.model.generator, sess=self.model.sess,
@@ -74,10 +75,10 @@ class TexyGen(BaseModel):
         inll.set_name('nll-test-' + data_loc)
         return inll
 
-    def init_persample_ll(self, data_loc, temperature):
+    def init_persample_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.ItemFetcher import ItemFetcher
         dataloader = self.dataloader_class(batch_size=self.model.batch_size,
-                                           seq_length=self.model.sequence_length)
+                                           seq_length=self.parser.max_length)
         dataloader.create_batches(data_loc)
         if temperature['value'] is None:
             item_to_be_fetched = self.model.generator.selfdefined_persample_ll
@@ -94,15 +95,15 @@ class TexyGen(BaseModel):
         return inll
 
     @data2tempfile_decorator
-    def get_nll(self, temperature, samples=None, samples_loc=None):
-        inll = self.init_nll(samples_loc, temperature)
-        score = inll.get_score()
+    def get_nll(self, samples, samples_loc, temperature):
+        nll = self.init_nll(samples_loc, temperature)
+        score = nll.get_score()
         return float(score)
 
     @data2tempfile_decorator
-    def get_persample_ll(self, temperature, samples=None, samples_loc=None):
-        ll = self.init_persample_ll(samples_loc, temperature)
-        score = ll.get_score()
+    def get_persample_nll(self, samples, samples_loc, temperature):
+        persample_nll = self.init_persample_nll(samples_loc, temperature)
+        score = persample_nll.get_score()
         return [float(s) for s in score]
 
     def get_saving_path(self):
@@ -118,7 +119,7 @@ class TexyGen(BaseModel):
         self.model.sess.run(tf.local_variables_initializer())
         self.model.load_generator_discriminator()
 
-    def delete(self):
+    def reset_model(self):
         import tensorflow as tf
         tf.reset_default_graph()
 
