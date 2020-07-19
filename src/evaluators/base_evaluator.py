@@ -1,5 +1,3 @@
-from functools import reduce
-
 from .best_model_tracker import BestModelTracker
 from .model_dumper import ModelDumper
 
@@ -96,7 +94,6 @@ class Evaluator:
         dumping_object['test']['sentence'] = self.parser.detokenize(test_tokens)
 
         self.add_persample_metrics(dumping_object, model)
-        assert self.supplementary_info_exists_for_each_sample(dumping_object)
 
         dumper.dump_samples_with_persample_metrics(
             dumping_object, restore_type, self.temperature)
@@ -121,21 +118,6 @@ class Evaluator:
         dumper.dump_final_evaluation_results(scores, restore_type, self.temperature)
         dumper.update_persample_metrics_for_generated_samples(
             persample_scores, restore_type, self.temperature)
-
-    @staticmethod
-    def supplementary_info_exists_for_each_sample(dumping_object):
-        for group_key, group_value in dumping_object.items():
-            lens = [len(v) for v in group_value.values()]
-            result = reduce(lambda prev, v: prev and (v == lens[0]), lens, True)
-            if result == False:
-                print('{} : {} : {} has invalid supplementary info length'
-                      .format(
-                          group_key,
-                          list(group_value.keys()),
-                          lens)
-                      )
-                return False
-        return True
 
 
 # ######## COCO

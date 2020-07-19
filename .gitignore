@@ -5,3 +5,4 @@ data
 *.pyc
 __pycache__
 .env
+ehsan_db.py

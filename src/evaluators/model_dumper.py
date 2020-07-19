@@ -88,6 +88,8 @@ class ModelDumper:
                 for i in range(len(dmp_obj['sentence']))
             ]
 
+        assert ModelDumper.persample_metrics_exist_for_each_sample(dumping_object)
+
         model_samples = ModelSamples(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
@@ -163,3 +165,18 @@ class ModelDumper:
             return '_unbiased' + format(temperature['value'], '0.6f')
         else:
             raise BaseException('invalid temperature type!!')
+
+    @staticmethod
+    def persample_metrics_exist_for_each_sample(dumping_object):
+        for group_key, group_value in dumping_object.items():
+            lens = [len(v) for v in group_value.values()]
+            result = reduce(lambda prev, v: prev and (v == lens[0]), lens, True)
+            if result == False:
+                print('{} : {} : {} has invalid persample metrics length'
+                      .format(
+                          group_key,
+                          list(group_value.keys()),
+                          lens)
+                      )
+                return False
+        return True
