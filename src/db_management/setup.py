@@ -12,7 +12,17 @@ MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASS = os.getenv("MONGO_PASS")
 AUTHENTICATION_SOURCE = os.getenv("AUTHENTICATION_SOURCE")
 
+assert not (
+    MONGO_DB == '' or
+    MONGO_HOST == '' or
+    MONGO_PORT == '' or
+    MONGO_USER == '' or
+    MONGO_PASS == '' or
+    AUTHENTICATION_SOURCE == ''
+)
+
 res = connect(db=MONGO_DB, host=MONGO_HOST, port=MONGO_PORT,
               username=MONGO_USER, password=MONGO_PASS,
-              authentication_source=AUTHENTICATION_SOURCE)
+              authentication_source=AUTHENTICATION_SOURCE,
+              compressors="zstd,snappy,zlib")
 print(res)

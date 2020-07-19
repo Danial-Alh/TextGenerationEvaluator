@@ -6,7 +6,7 @@ from metrics.base_metric import BaseMetric
 
 class Bleu(BaseMetric):
     def __init__(self, samples, min_n=2, max_n=5, parser: ReversibleField = None, parse=True):
-        super().__init__('bleu')
+        super().__init__()
         from fast_bleu import BLEU as FBLEU
 
         assert max_n >= min_n
@@ -30,7 +30,7 @@ class Bleu(BaseMetric):
 
 class SelfBleu(BaseMetric):
     def __init__(self, samples, min_n=2, max_n=5, parser: ReversibleField = None, parse=True):
-        super().__init__('self-bleu')
+        super().__init__()
         from fast_bleu import SelfBLEU as FSBLEU
 
         assert max_n >= min_n

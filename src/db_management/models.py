@@ -1,40 +1,54 @@
 from mongoengine.document import Document, EmbeddedDocument
-from mongoengine.fields import (EmbeddedDocumentListField, FloatField,
-                                ListField, MapField, StringField)
-
-import db_management.setup
+from mongoengine.fields import (EmbeddedDocumentListField, EmbeddedDocumentField,
+                                FloatField, DateTimeField, IntField, StringField,
+                                ListField, MapField)
+import datetime
+# import db_management.setup
 
 
 class Model(Document):
     machine_name = StringField(required=True)
     model_name = StringField(required=True)
     dataset_name = StringField(required=True)
-    run = StringField()
+    run = IntField()
     restore_type = StringField()
-    temperature = FloatField()
+    temperature = StringField()
+
+    created_at = DateTimeField(required=True, default=datetime.datetime.now)
+    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
+
     meta = {
         'abstract': True,
+        # 'allow_inheritence': True
+    }
+    TEMP_META = {
         'indexes': [
-            '$machine_name'
-            '$model_name',
-            '$dataset_name',
-            '$restore_type'
+            '#machine_name',
+            '#model_name',
+            '#dataset_name',
+            '#restore_type',
             '+run',
             '+temperature',
+            '-created_at',
+            '-updated_at',
         ],
     }
 
 
 class MetricHistoryRecord(EmbeddedDocument):
-    epoch = StringField(required=True)
+    epoch = IntField(required=True)
     value = FloatField(required=True)
+
+    created_at = DateTimeField(required=True, default=datetime.datetime.now)
+    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
 
 
 class InTrainingEvaluationHistory(Model):
     all_history = MapField(EmbeddedDocumentListField(MetricHistoryRecord))
     best_history = MapField(EmbeddedDocumentListField(MetricHistoryRecord))
+
     meta = {
-        'indexes': Model.meta['indexes']
+        'indexes': Model.TEMP_META['indexes']
     }
 
 
@@ -46,22 +60,27 @@ class MetricResult(EmbeddedDocument):
 class Sample(EmbeddedDocument):
     tokens = ListField(StringField(), required=True)
     sentence = StringField(required=True)
-    metrics = MapField(MetricResult, required=True)
+    metrics = MapField(EmbeddedDocumentField(MetricResult))
     # other supplementary info can be placed here (dynamic fields)
 
 
 class ModelSamples(Model):
-    generated_samples = EmbeddedDocumentListField(Sample, required=True)
-    test_samples = EmbeddedDocumentListField(Sample, required=True)
+    generated_samples = EmbeddedDocumentListField(Sample)
+    test_samples = EmbeddedDocumentListField(Sample)
+
     meta = {
-        'indexes': Model.meta['indexes']
+        'indexes': Model.TEMP_META['indexes']
     }
 
 
 class ModelEvaluationResult(Model):
-    metrics = MapField(MetricResult, required=True)
+    metrics = MapField(EmbeddedDocumentField(MetricResult), required=True)
+
     meta = {
-        'indexes': Model.meta['indexes']
+        'indexes': Model.TEMP_META['indexes']
     }
 
-# print(ModelEvaluationResult.objects)
+
+print('InTrainingEvaluationHistory documents: {}'.format(len(InTrainingEvaluationHistory.objects())))
+print('ModelSamples documents: {}'.format(len(ModelSamples.objects())))
+print('ModelEvaluationResult documents: {}'.format(len(ModelEvaluationResult.objects())))

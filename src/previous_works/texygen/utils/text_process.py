@@ -41,7 +41,7 @@ def code_to_text(codes, dictionary, out_file=None, eof_code=None):
         for number in numbers:
             if number == eof_code:
                 continue
-            translated_line += (dictionary[str(number)] + ' ')
+            translated_line += (dictionary[number] + ' ')
         if translated_line.strip() is not '':
             paras.append(translated_line)
     paras = '\n'.join(paras)

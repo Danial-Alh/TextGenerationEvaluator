@@ -20,34 +20,33 @@ class RealWorldEvaluator(Evaluator):
     def init_metrics(self, mode):
         if mode == 'train':
             print(len(self.train_ds), len(self.valid_ds))
-            valid_sentences = self.parser.detokenize(self.valid_ds)
+            valid_sentences = self.parser.detokenize(self.valid_ds.text)
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
         elif mode == 'eval':
-            test_sentences = self.parser.detokenize(self.test_ds)
+            test_sentences = self.parser.detokenize(self.test_ds.text)
             self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)
-            self.multiset_distances = MultisetDistances(test_sentences, min_n=2, max_n=5)
+            self.multiset_distances = MultisetDistances(test_sentences, min_n=2, max_n=5,
+                                                        parser=self.parser, parse=False)
             self.fbd = FBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
             self.embd = EMBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
         elif mode == 'gen':
-            pass
-        elif mode == 'eval_precheck':
             pass
         else:
             raise BaseException('invalid evaluator mode!')
 
     def get_initial_scores_during_training(self):
         return {
-            'bleu3': [{"value": 0.0, "epoch": -1}],
-            'bleu4': [{"value": 0.0, "epoch": -1}],
-            'bleu5': [{"value": 0.0, "epoch": -1}],
-            'nll': [{"value": np.inf, "epoch": -1}]
+            'bleu3': {"value": 0.0, "epoch": -1},
+            'bleu4': {"value": 0.0, "epoch": -1},
+            'bleu5': {"value": 0.0, "epoch": -1},
+            'neg_nll': {"value": -np.inf, "epoch": -1}
         }
 
     def get_during_training_scores(self, model: BaseModel):
-        samples = model.generate_samples(self.during_training_n_sampling)
-        samples = self.parser.reverse(samples)
+        samples = model.generate_samples(self.during_training_n_sampling, {'value': None})
+        samples = self.parser.detokenize(samples)
         new_scores = {
-            'nll': model.get_nll(self.valid_ds, self.temperature)
+            'neg_nll': -model.get_nll(self.valid_ds.text, self.temperature)
         }
         for i, v in self.bleu.get_score(samples, parse=False)[0].items():
             new_scores['bleu{}'.format(i)] = v
@@ -58,15 +57,16 @@ class RealWorldEvaluator(Evaluator):
         if model.get_name().lower() == 'real':
             dummy_arr = [0.0 for _ in range(len(dumping_object['test']['text']))]
             return {'gen': {'nllq': dummy_arr}, 'test': {'nllq': dummy_arr}}
-        nllqfromp = model.get_persample_nll(self.temperature, dumping_object['test']['tokens'])
-        nllqfromq = model.get_persample_nll(self.temperature, dumping_object['gen']['tokens'])
-        return {'gen': {'nllq': nllqfromq}, 'test': {'nllq': nllqfromp}}
+        nllqfromp = model.get_persample_nll(dumping_object['test']['tokens'], self.temperature)
+        nllqfromq = model.get_persample_nll(dumping_object['gen']['tokens'], self.temperature)
+        dumping_object['gen']['nllq'] = nllqfromq
+        dumping_object['test']['nllq'] = nllqfromp
 
     def get_test_scores(self, samples: ModelSamples):
         # generated_tokens = [r.tokens for r in samples.generated_samples]
         generated_sentences = [r.sentence for r in samples.generated_samples]
 
-        if self.SELFBLEU_N_S == -1:
+        if self.SELFBLEU_N_S == -1 or self.SELFBLEU_N_S > len(generated_sentences):
             subsampled_sentences = generated_sentences
             subsamples_mask = np.arange(len(generated_sentences))
         else:
@@ -74,23 +74,24 @@ class RealWorldEvaluator(Evaluator):
                                                self.SELFBLEU_N_S, replace=False)
             subsampled_sentences = np.array(generated_sentences)[subsamples_mask].tolist()
 
-        bleu_result = self.bleu.get_score(generated_sentences)[1]
+        bleu_result = self.bleu.get_score(generated_sentences, parse=False)[1]
         selfbleu_result = SelfBleu(subsampled_sentences, 2, 5, self.parser, parse=False)\
             .get_score()[1]
-        jaccard_result = self.multiset_distances.get_score('jaccard', generated_sentences)
+        jaccard_result = self.multiset_distances.get_score(
+            'jaccard', generated_sentences, parse=False)
         fbd_result = self.fbd.get_score(generated_sentences)
         embd_result = self.embd.get_score(generated_sentences)
 
-        persample_scores = {
-            'nll': [r.metrics['nllq'] for r in samples.test_samples],
-        }
+        persample_scores = {}
+
         mean_scores = {
-            **{
-                'fbd': fbd_result,
-                'embd': embd_result
-            },
-            **{jaccard_result}
+            'nll': np.mean([r.metrics['nllq'].value for r in samples.test_samples]),
+            'fbd': fbd_result,
+            'embd': embd_result
         }
+
+        for i, v in jaccard_result.items():
+            mean_scores['jaccard{}'.format(i)] = v
 
         for i, v in bleu_result.items():
             persample_scores['bleu{}'.format(i)] = v
@@ -98,6 +99,15 @@ class RealWorldEvaluator(Evaluator):
         for i, v in selfbleu_result.items():
             persample_scores['selfbleu{}'.format(i)] = {'ids': subsamples_mask, 'values': v}
 
-        for key in persample_scores:
-            mean_scores[key] = np.mean(persample_scores[key])
+        for key, values in persample_scores.items():
+            if isinstance(values, dict):
+                mean_scores[key] = {
+                    'value': np.mean(values['values']),
+                    'std': np.std(values['values'])
+                }
+            else:
+                mean_scores[key] = {
+                    'value': np.mean(values),
+                    'std': np.std(values)
+                }
         return persample_scores, mean_scores

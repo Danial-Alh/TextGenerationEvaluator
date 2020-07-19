@@ -4,7 +4,7 @@ from ...utils.metrics.Metrics import Metrics
 
 
 class Nll(Metrics):
-    def __init__(self, data_loader, rnn, sess, temperature):
+    def __init__(self, data_loader, rnn, sess, temperature={'value': None}):
         super().__init__()
         self.name = 'nll-oracle'
         self.data_loader = data_loader

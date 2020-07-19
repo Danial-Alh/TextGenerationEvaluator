@@ -305,7 +305,7 @@ class Seqgan(Gan):
             with open(self.generator_file, 'r') as file:
                 codes = get_tokenlized(self.generator_file)
             with open(self.test_file, 'w') as outfile:
-                outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.wrapper.parser.END_TOKEN_ID))
+                outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.end_token))
 
         self.pre_epoch_num = 80
         self.adversarial_epoch_num = 100

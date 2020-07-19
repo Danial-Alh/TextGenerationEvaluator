@@ -24,6 +24,9 @@ class DataLoader():
                     if len(parse_line) == self.seq_length:
                         self.token_stream.append(parse_line)
 
+        if len(self.token_stream) % self.batch_size != 0:
+            self.token_stream.extend([[self.end_token] * self.seq_length]
+                                * (self.batch_size - (len(self.token_stream) % self.batch_size)))
         self.num_batch = int(len(self.token_stream) / self.batch_size)
         self.token_stream = self.token_stream[:self.num_batch * self.batch_size]
         self.sequence_batch = np.split(np.array(self.token_stream), self.num_batch, 0)

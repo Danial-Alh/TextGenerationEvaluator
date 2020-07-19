@@ -14,9 +14,10 @@ class metric_names:
 
 
 class BertFeature:
-    def __init__(self, bert_model_dir, model_name='bert-base-uncased'):
+    def __init__(self, bert_model_dir, model_name='bert-base-uncased', device='cuda'):
         self.tokenizer = trns.BertTokenizer.from_pretrained(model_name, cache_dir=bert_model_dir)
-        self.model = trns.BertModel.from_pretrained(model_name, cache_dir=bert_model_dir)
+        self.model = trns.BertModel.from_pretrained(model_name, cache_dir=bert_model_dir).to(device)
+        self.device = device
 
     def get_features(self, sentences):
         if type(sentences) is not list:
@@ -25,10 +26,11 @@ class BertFeature:
         for sentence in sentences:
             # Add special tokens takes care of adding [CLS], [SEP], <s>... tokens in the right way for each model.
             input_ids = torch.tensor([self.tokenizer.encode(sentence, add_special_tokens=True)])
+            input_ids = input_ids.to(self.device)
             with torch.no_grad():
                 pooler_output = self.model(input_ids)[1]
                 res.append(pooler_output)
-        return torch.cat(res, 0).numpy()
+        return torch.cat(res, 0).cpu().numpy()
 
 
 # from https://github.com/bioinf-jku/TTUR/blob/master/fid.py
@@ -85,13 +87,13 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
 
 class FBD(BaseMetric):
-    def __init__(self, references, model_name, bert_model_dir):
+    def __init__(self, references, model_name, bert_model_dir, device='cuda'):
         # inputs must be list of str
 
         self.model_name = model_name
         self.bert_model_dir = bert_model_dir
 
-        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir, model_name=model_name)
+        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir, model_name=model_name, device=device)
 
         self.refrence_mu, self.refrence_sigma = self._calculate_statistics(references)
 
@@ -112,12 +114,12 @@ class FBD(BaseMetric):
 
 
 class EMBD(BaseMetric):
-    def __init__(self, references, model_name, bert_model_dir):
+    def __init__(self, references, model_name, bert_model_dir, device='cuda'):
         # inputs must be list of str
         self.model_name = model_name
         self.bert_model_dir = bert_model_dir
 
-        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir, model_name=model_name)
+        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir, model_name=model_name, device=device)
 
         self.reference_features = self._get_features(references)  # sample * feature
         assert self.reference_features.shape[0] == len(references)

@@ -1,7 +1,9 @@
 from torchtext.data import ReversibleField
 
-from previous_works.model_wrappers.base_model import (BaseModel, data2tempfile_decorator,
-                                                      empty_sentence_remover_decorator)
+from previous_works.model_wrappers.base_model import (BaseModel,
+                                                      data2tempfile_decorator,
+                                                      empty_sentence_remover_decorator,
+                                                      remove_extra_rows)
 
 
 class TexyGen(BaseModel):
@@ -38,7 +40,7 @@ class TexyGen(BaseModel):
         self.model_class = gans[gan_name.lower()]
         self.dataloader_class = dls[gan_name.lower()]
 
-    def create_model(self):
+    def init_model(self):
         self.model = self.model_class()
         self.model.init_real_trainng(self.parser)
         self.load()
@@ -100,6 +102,7 @@ class TexyGen(BaseModel):
         score = nll.get_score()
         return float(score)
 
+    @remove_extra_rows
     @data2tempfile_decorator
     def get_persample_nll(self, samples, samples_loc, temperature):
         persample_nll = self.init_persample_nll(samples_loc, temperature)
@@ -131,4 +134,4 @@ if __name__ == "__main__":
     print(train_ds[0].text)
 
     m = TexyGen('seqgan', parser)
-    m.create_model()
+    m.init_model()

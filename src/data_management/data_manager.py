@@ -1,6 +1,7 @@
 import io
 import torchtext
 from torchtext.data import Field, ReversibleField, TabularDataset
+import numpy as np
 
 from utils.path_configs import DATASET_PATH
 from utils.file_handler import dump, load
@@ -47,24 +48,44 @@ def load_real_dataset(dataset_name):
 
     TEXT = load(file_name=dataset_name+"_vocab.pkl", parent_path=DATASET_PATH)
 
-    trn = LanguageModelingDataset(
-        path=DATASET_PATH + train_filename,
-        text_field=TEXT)
+    trn = LanguageModelingDataset(path=DATASET_PATH + train_filename,
+                                  newline_eos=False, text_field=TEXT)
 
-    vld = LanguageModelingDataset(
-        path=DATASET_PATH + valid_filename,
-        text_field=TEXT)
+    vld = LanguageModelingDataset(path=DATASET_PATH + valid_filename,
+                                  newline_eos=False, text_field=TEXT)
 
-    tst = LanguageModelingDataset(
-        path=DATASET_PATH + test_filename,
-        text_field=TEXT)
-    
+    tst = LanguageModelingDataset(path=DATASET_PATH + test_filename,
+                                  newline_eos=False, text_field=TEXT)
+
     import revtok
-    TEXT.detokenize = lambda B: [revtok.detokenize(l) for l in B]
-    TEXT.denumericalize = lambda B: [[TEXT.vocab.itos[ind] for ind in ex] for ex in B.tolist()]
 
-    print('vocab size: {}\ntrain size: {}\n valid size: {}\n test size: {}\n max length: {}'
-          .format(len(TEXT.vocab), len(trn), len(vld), len(tst), TEXT.max_length))
+    def denumericalize(batch):
+        batch = [[TEXT.vocab.itos[ind] for ind in ex] for ex in batch.tolist()]
+
+        def trim(s, t):
+            sentence = []
+            for w in s:
+                if w == t:
+                    break
+                sentence.append(w)
+            return sentence
+
+        batch = [trim(ex, TEXT.eos_token) for ex in batch]  # trim past frst eos
+
+        def filter_special(tok):
+            return tok not in (TEXT.init_token, TEXT.pad_token)
+
+        batch = [list(filter(filter_special, ex)) for ex in batch]
+
+        return batch
+
+    TEXT.detokenize = lambda B: [revtok.detokenize(l) for l in B]
+    TEXT.denumericalize = denumericalize
+
+    lens = [len(x) for x in trn.text]
+
+    print('vocab size: {}\ntrain size: {}\n valid size: {}\n test size: {}\n max length: {}\n mean train length: {:.2f}'
+          .format(len(TEXT.vocab), len(trn), len(vld), len(tst), TEXT.max_length, np.mean(lens)))
     return trn, vld, tst, TEXT
 
 

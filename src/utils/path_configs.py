@@ -2,14 +2,20 @@
 import inspect
 import platform
 import os
+from dotenv import load_dotenv
+
+load_dotenv(verbose=True)
+
+__bert_path = os.getenv("MONGO_DB")
+assert __bert_path != ''
 
 COMPUTER_NAME = platform.node()
 
-ROOT_PATH = os.path.abspath(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) + '/../../') + '/'
+ROOT_PATH = os.path.abspath(os.path.dirname(os.path.abspath(
+    inspect.getfile(inspect.currentframe()))) + '/../../') + '/'
 
 DATA_PATH = ROOT_PATH + 'data/'
-BERT_PATH = DATA_PATH + "bert_models/uncased_L-12_H-768_A-12/"
-CH_BERT_PATH = DATA_PATH + "bert_models/chinese_L-12_H-768_A-12/"
+BERT_PATH = __bert_path
 MODEL_PATH = DATA_PATH + 'temp_models/'
 EXPORT_PATH = DATA_PATH + 'exports/'
 TABLE_EXPORT_PATH = DATA_PATH + 'exports/tables/'

@@ -11,15 +11,16 @@ from ..utils.text_process import get_tokenlized
 
 
 def generate_samples(sess, trainable_model, batch_size, generated_num, output_file=None, get_code=True,
-                     temperature=None):
+                     temperature={'value': None}):
     # Generate Samples
     generated_samples = []
     if temperature['value'] is None:
         gen_func = trainable_model.generate
     elif temperature['type'] == 'biased':
-        gen_func =lambda s: trainable_model.temperature_generate(s, temperature['value'])
+        def gen_func(s): return trainable_model.temperature_generate(s, temperature['value'])
     elif temperature['type'] == 'unbiased':
-        gen_func = lambda s: trainable_model.unbiased_temperature_generate(s, temperature['value'])
+        def gen_func(s): return trainable_model.unbiased_temperature_generate(
+            s, temperature['value'])
     else:
         raise BaseException('invalid temperature type!')
     for _ in tqdm(range(int(generated_num / batch_size) + 1), ncols=80):
@@ -74,7 +75,8 @@ def save_obj(obj, folder_path, file_name):
 
 
 def load_obj(folder_path, file_name):
-    import os, json
+    import os
+    import json
     file_path = folder_path + file_name + '.json'
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)

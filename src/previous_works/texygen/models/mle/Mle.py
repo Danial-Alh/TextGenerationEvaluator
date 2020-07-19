@@ -45,7 +45,8 @@ class Mle(Gan):
         oracle_dataloader = DataLoader(batch_size=self.batch_size, seq_length=self.sequence_length)
         dis_dataloader = None
 
-        self.set_data_loader(gen_loader=gen_dataloader, dis_loader=dis_dataloader, oracle_loader=oracle_dataloader)
+        self.set_data_loader(gen_loader=gen_dataloader,
+                             dis_loader=dis_dataloader, oracle_loader=oracle_dataloader)
 
     def init_metric(self):
         nll = Nll(data_loader=self.oracle_data_loader, rnn=self.oracle, sess=self.sess)
@@ -61,7 +62,8 @@ class Mle(Gan):
         # self.add_metric(docsim)
 
     def train_discriminator(self):
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.generator, self.batch_size,
+                         self.generate_num, self.generator_file)
         self.dis_data_loader.load_train_data(self.oracle_file, self.generator_file)
         for _ in range(3):
             self.dis_data_loader.next_batch()
@@ -74,7 +76,8 @@ class Mle(Gan):
             self.save_discriminator()
 
     def evaluate(self):
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.generator, self.batch_size,
+                         self.generate_num, self.generator_file)
         if self.oracle_data_loader is not None:
             self.oracle_data_loader.create_batches(self.generator_file)
         if self.log is not None:
@@ -97,8 +100,10 @@ class Mle(Gan):
 
         self.pre_epoch_num = 80
         self.log = open('experiment-log-mle.csv', 'w')
-        generate_samples(self.sess, self.oracle, self.batch_size, self.generate_num, self.oracle_file)
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.oracle, self.batch_size,
+                         self.generate_num, self.oracle_file)
+        generate_samples(self.sess, self.generator, self.batch_size,
+                         self.generate_num, self.generator_file)
         self.gen_data_loader.create_batches(self.oracle_file)
         self.oracle_data_loader.create_batches(self.generator_file)
         self.init_metric()
@@ -112,7 +117,8 @@ class Mle(Gan):
             self.add_epoch()
             if epoch % 5 == 0:
                 self.evaluate()
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.generator, self.batch_size,
+                         self.generate_num, self.generator_file)
         return
 
     def init_real_trainng(self, parser=None):
@@ -133,7 +139,8 @@ class Mle(Gan):
         oracle_dataloader = None
         dis_dataloader = None
 
-        self.set_data_loader(gen_loader=gen_dataloader, dis_loader=dis_dataloader, oracle_loader=oracle_dataloader)
+        self.set_data_loader(gen_loader=gen_dataloader,
+                             dis_loader=dis_dataloader, oracle_loader=oracle_dataloader)
         return word_index_dict, index_word_dict
 
     def train_real(self, data_loc=None, wrapper_ref=None):
@@ -150,13 +157,18 @@ class Mle(Gan):
             with open(self.generator_file, 'r') as file:
                 codes = get_tokenlized(self.generator_file)
             with open(self.test_file, 'w') as outfile:
-                outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.wrapper.parser.END_TOKEN_ID))
+                outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.end_token))
 
-        self.pre_epoch_num = 80
+        # self.pre_epoch_num = 80
+        self.pre_epoch_num = 2
         self.adversarial_epoch_num = 100
         self.log = open('experiment-log-mle-real.csv', 'w')
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.generator, self.batch_size,
+                         self.generate_num, self.generator_file)
         self.gen_data_loader.create_batches(self.oracle_file)
+
+        get_real_test_file()
+        self.evaluate()
 
         print('start pre-train generator:')
         for epoch in range(self.pre_epoch_num):
@@ -166,7 +178,9 @@ class Mle(Gan):
             print('epoch:' + str(self.epoch) + '\t time:' + str(end - start))
             self.add_epoch()
             if epoch % 5 == 0:
-                generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+                generate_samples(self.sess, self.generator, self.batch_size,
+                                 self.generate_num, self.generator_file)
                 get_real_test_file()
                 self.evaluate()
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.generator, self.batch_size,
+                         self.generate_num, self.generator_file)

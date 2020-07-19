@@ -1,6 +1,7 @@
 import os
 import shutil
 from torchtext.data import ReversibleField
+import torch
 
 from data_management.data_manager import load_real_dataset
 from utils.file_handler import delete_file, write_text
@@ -11,6 +12,7 @@ def empty_sentence_remover_decorator(func):
     def wrapper(self, n_samples, *args, **kwargs):
         print('generating {} samples from {}!'.format(n_samples, self.get_name()))
         result = func(self, n_samples, *args, **kwargs)
+        result = torch.tensor([list(map(int, l)) for l in result])
         result = self.parser.denumericalize(result)
         result = list(filter(lambda x: len(x) > 0, result))
         print('{} samples generated from {}!'.format(len(result), self.get_name()))
@@ -32,6 +34,16 @@ def data2tempfile_decorator(func):
         result = func(self, samples, samples_loc, *args, **kwargs)
         delete_file(samples_loc)
         return result
+
+    return wrapper
+
+
+def remove_extra_rows(func):
+    def wrapper(self, samples, *args, **kwargs):
+        assert samples is not None
+        result = func(self, samples, *args, **kwargs)
+        assert len(samples) <= len(result)
+        return result[:len(samples)]
 
     return wrapper
 
@@ -70,7 +82,7 @@ class BaseModel:
         self.valid_loc = write_text([' '.join(list(map(str, s))) for s in valid_data],
                                     self.get_name() + '_valid', TEMP_PATH)
 
-    def create_model(self):
+    def init_model(self):
         pass
 
     def train(self, samples, samples_loc):
@@ -84,6 +96,7 @@ class BaseModel:
     def get_nll(self, samples, samples_loc, temperature):
         pass
 
+    @remove_extra_rows
     @data2tempfile_decorator
     def get_persample_nll(self, samples, samples_loc, temperature):
         pass

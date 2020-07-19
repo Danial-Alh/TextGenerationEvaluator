@@ -1,8 +1,9 @@
 from functools import reduce
 
+from .best_model_tracker import BestModelTracker
+from .model_dumper import ModelDumper
+
 from db_management.models import ModelSamples
-from evaluators.best_model_tracker import BestModelTracker
-from evaluators.model_dumper import ModelDumper
 from previous_works import create_model
 from previous_works.model_wrappers.base_model import BaseModel
 from utils.path_configs import BERT_PATH as B_P
@@ -16,12 +17,26 @@ class Evaluator:
         if dm_name.startswith('coco'):
             Evaluator.TOTAL_RUNS = 3
             Evaluator.SELFBLEU_N_S = 5000
-            Evaluator.TEST_N_S = 20000
+            Evaluator.BERT_PATH = B_P
+        elif dm_name.startswith('news'):
+            Evaluator.TOTAL_RUNS = 3
+            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.BERT_PATH = B_P
+        elif dm_name.startswith('ptb'):
+            Evaluator.TOTAL_RUNS = 3
+            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.BERT_PATH = B_P
+        elif dm_name.startswith('amazon_app_book'):
+            Evaluator.TOTAL_RUNS = 3
+            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.BERT_PATH = B_P
+        elif dm_name.startswith('yelp_restaurant'):
+            Evaluator.TOTAL_RUNS = 3
+            Evaluator.SELFBLEU_N_S = 5000
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('oracle'):
             Evaluator.TOTAL_RUNS = 3
             Evaluator.SELFBLEU_N_S = 5000
-            Evaluator.TEST_N_S = 25000
         else:
             raise BaseException('dm_name {} is invalid!'.format(dm_name))
 
@@ -56,12 +71,13 @@ class Evaluator:
             run, restore_type, model_name))
 
         if model_name != 'real':
-            tracker = BestModelTracker(model_name, run, self)
-            model = tracker.model
-            dumper = tracker.dumper
+            model = create_model(model_name, self.parser)
+            model.delete_saved_model()
+            model.init_model()
+            dumper = ModelDumper(model, run, self.dm_name)
             dumper.restore_model(restore_type)
 
-            generated_tokens = model.generate_samples(self.TEST_N_S, self.temperature)
+            generated_tokens = model.generate_samples(len(self.test_ds), self.temperature)
             test_tokens = list(self.test_ds.text)
         else:
             model = create_model('real', None)
@@ -97,7 +113,7 @@ class Evaluator:
         samples = dumper.load_samples_with_persample_metrics(restore_type, self.temperature)
 
         print('samples: {}, refs: {}, raw tests: {}'
-              .format(len(samples.generate_samples),
+              .format(len(samples.generated_samples),
                       len(samples.test_samples),
                       len(self.test_ds)))
 
@@ -109,13 +125,15 @@ class Evaluator:
     @staticmethod
     def supplementary_info_exists_for_each_sample(dumping_object):
         for group_key, group_value in dumping_object.items():
-            result = reduce(
-                lambda prev, v: prev and (len(v) == len(group_value.values[0])),
-                group_value.values(),
-                True
-            )
+            lens = [len(v) for v in group_value.values()]
+            result = reduce(lambda prev, v: prev and (v == lens[0]), lens, True)
             if result == False:
-                print('{} has invalid supplementary info length'.format(group_key))
+                print('{} : {} : {} has invalid supplementary info length'
+                      .format(
+                          group_key,
+                          list(group_value.keys()),
+                          lens)
+                      )
                 return False
         return True
 

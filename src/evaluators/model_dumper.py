@@ -11,11 +11,11 @@ from utils.file_handler import (create_folder_if_not_exists, dump_json,
                                 zip_folder)
 from utils.path_configs import COMPUTER_NAME, EXPORT_PATH, MODEL_PATH
 
-from .base_evaluator import BaseModel
+# from .base_evaluator import BaseModel
 
 
 class ModelDumper:
-    def __init__(self, model: BaseModel, run=0, dm_name=''):
+    def __init__(self, model, run=0, dm_name=''):
         self.run = run
         self.dm_name = dm_name
         self.model = model
@@ -39,20 +39,26 @@ class ModelDumper:
               (self.run, key, self.model.get_name()))
         self.model.load()
 
-    def init_history(self):
-        InTrainingEvaluationHistory.objects(
+    def init_history(self, initial_scores=None):
+        InTrainingEvaluationHistory(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
-            best_history=[], all_history=[]
+            best_history={}, all_history={}
         ).save()
+
+        if initial_scores is not None:
+            self.append_to_history(initial_scores)
+            self.append_to_best_history(initial_scores)
 
     def append_to_best_history(self, new_metrics):
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
-        ).get()
+        ).order_by('-created_at').first()
 
         for metric, value in new_metrics.items():
+            if metric not in model_history.best_history:
+                model_history.best_history[metric] = []
             model_history.best_history[metric].append(MetricHistoryRecord(**value))
 
         model_history.save()
@@ -61,9 +67,11 @@ class ModelDumper:
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
-        ).get()
+        ).order_by('-created_at').first()
 
         for metric, value in new_metrics.items():
+            if metric not in model_history.all_history:
+                model_history.all_history[metric] = []
             model_history.all_history[metric].append(MetricHistoryRecord(**value))
 
         model_history.save()
@@ -72,8 +80,8 @@ class ModelDumper:
         def convert_dmpobj_to_db_sample(dmp_obj):
             return [
                 Sample(
-                    sentence=dmp_obj['sentence'],
-                    tokens=dmp_obj['tokens'],
+                    sentence=dmp_obj['sentence'][i],
+                    tokens=dmp_obj['tokens'][i],
                     metrics={key: MetricResult(value=value[i])
                              for key, value in dmp_obj.items() if key not in ['sentence', 'tokens']}
                 )
@@ -84,10 +92,16 @@ class ModelDumper:
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
-            generated_samples=convert_dmpobj_to_db_sample(dumping_object['gen']),
-            test_samples=convert_dmpobj_to_db_sample(dumping_object['test'])
+            generated_samples=[],
+            test_samples=[]
         )
 
+        model_samples.save()
+
+        model_samples.generated_samples = convert_dmpobj_to_db_sample(dumping_object['gen'])
+        model_samples.test_samples = convert_dmpobj_to_db_sample(dumping_object['test'])
+
+        # model_samples.save(validate=False)
         model_samples.save()
 
     def update_persample_metrics_for_generated_samples(self, dumping_object: dict, restore_type, temperature):
@@ -95,7 +109,7 @@ class ModelDumper:
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
-        ).get()
+        ).order_by('-created_at').first()
 
         for metric in dumping_object:
             if isinstance(dumping_object[metric], dict):
@@ -114,7 +128,7 @@ class ModelDumper:
         result = ModelSamples.objects(
             model_name=self.model.get_name(), dataset_name=self.dm_name,
             run=self.run, restore_type=restore_type,
-            temperature=self.get_temperature_stringified(temperature)).get()
+            temperature=self.get_temperature_stringified(temperature)).order_by('-created_at').first()
         return result
 
     def dump_final_evaluation_results(self, dumping_object: dict, restore_type, temperature):
@@ -125,7 +139,10 @@ class ModelDumper:
         )
 
         for metric, value in dumping_object.items():
-            evaluation_result.metrics[metric] = MetricResult(value)
+            if isinstance(value, dict):
+                evaluation_result.metrics[metric] = MetricResult(**value)
+            else:
+                evaluation_result.metrics[metric] = MetricResult(value=value)
 
         evaluation_result.save()
 
@@ -134,7 +151,7 @@ class ModelDumper:
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
-        ).get()
+        ).order_by('-created_at').first()
 
     @staticmethod
     def get_temperature_stringified(temperature):
