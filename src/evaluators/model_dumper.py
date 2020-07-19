@@ -1,14 +1,14 @@
+from functools import reduce
 import os
 
 import numpy as np
 
 from db_management.models import (InTrainingEvaluationHistory,
                                   MetricHistoryRecord, MetricResult,
-                                  ModelEvaluationResult, ModelSamples)
-from db_management.models import MetricResult, Sample
-from utils.file_handler import (create_folder_if_not_exists, dump_json,
-                                load_json, read_text, unzip_file, write_text,
-                                zip_folder)
+                                  ModelEvaluationResult, ModelSamples,
+                                  Sample)
+from utils.file_handler import (create_folder_if_not_exists,
+                                unzip_file, zip_folder)
 from utils.path_configs import COMPUTER_NAME, EXPORT_PATH, MODEL_PATH
 
 # from .base_evaluator import BaseModel
@@ -171,7 +171,7 @@ class ModelDumper:
         for group_key, group_value in dumping_object.items():
             lens = [len(v) for v in group_value.values()]
             result = reduce(lambda prev, v: prev and (v == lens[0]), lens, True)
-            if result == False:
+            if result is not True:
                 print('{} : {} : {} has invalid persample metrics length'
                       .format(
                           group_key,

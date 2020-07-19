@@ -1,10 +1,9 @@
-from .best_model_tracker import BestModelTracker
-from .model_dumper import ModelDumper
-
 from db_management.models import ModelSamples
 from previous_works import create_model
 from previous_works.model_wrappers.base_model import BaseModel
 from utils.path_configs import BERT_PATH as B_P
+
+from .model_dumper import ModelDumper
 
 
 class Evaluator:

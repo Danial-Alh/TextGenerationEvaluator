@@ -1,5 +1,3 @@
-from functools import reduce
-
 import numpy as np
 from torchtext.data import ReversibleField
 
