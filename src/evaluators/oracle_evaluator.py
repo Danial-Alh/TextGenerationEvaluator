@@ -21,7 +21,7 @@ class OracleEvaluator(Evaluator):
             self.bleu3 = Bleu(test_tokens, weights=np.ones(3) / 3., other_instance=self.bleu5)
             self.bleu2 = Bleu(test_tokens, weights=np.ones(2) / 2., other_instance=self.bleu5)
             self.multiset_distances = MultisetDistances(test_tokens, min_n=2, max_n=5)
-        elif mode == 'gen':
+        elif mode == 'generated':
             self.oracle = Oracle_LSTM()
         elif mode == 'eval_precheck':
             pass
@@ -52,7 +52,7 @@ class OracleEvaluator(Evaluator):
     def get_sample_additional_fields(self, model: BaseModel, sample_codes, test_codes, restore_type):
         if model.get_name().lower() == 'real':
             dummy_arr = [1. for _ in range(len(test_codes))]
-            return {'gen': {'nllq': dummy_arr, 'nllp': dummy_arr},
+            return {'generated': {'nllq': dummy_arr, 'nllp': dummy_arr},
                     'test': {'nllq': dummy_arr, 'nllp': dummy_arr}}
         test_lines = self.parser.id_format2line(test_codes, merge=False)
         sample_lines = self.parser.id_format2line(sample_codes, merge=False)
@@ -65,7 +65,7 @@ class OracleEvaluator(Evaluator):
         nllqfromq = model.get_persample_nll(self.temperature, sample_codes)
         nllpfromp = self.oracle.log_probability(test_lines)
         nllpfromq = self.oracle.log_probability(sample_lines)
-        return {'gen': {'nllq': nllqfromq, 'nllp': nllpfromq},
+        return {'generated': {'nllq': nllqfromq, 'nllp': nllpfromq},
                 'test': {'nllq': nllqfromp, 'nllp': nllpfromp}}
 
     def get_test_scores(self, refs_with_additional_fields, samples_with_additional_fields):

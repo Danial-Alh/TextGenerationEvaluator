@@ -29,7 +29,7 @@ class RealWorldEvaluator(Evaluator):
                                                         parser=self.parser, parse=False)
             self.fbd = FBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
             self.embd = EMBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
-        elif mode == 'gen':
+        elif mode == 'generated':
             pass
         else:
             raise BaseException('invalid evaluator mode!')
@@ -56,10 +56,10 @@ class RealWorldEvaluator(Evaluator):
     def add_persample_metrics(self, dumping_object, model):
         if model.get_name().lower() == 'real':
             dummy_arr = [0.0 for _ in range(len(dumping_object['test']['text']))]
-            return {'gen': {'nllq': dummy_arr}, 'test': {'nllq': dummy_arr}}
+            return {'generated': {'nllq': dummy_arr}, 'test': {'nllq': dummy_arr}}
         nllqfromp = model.get_persample_nll(dumping_object['test']['tokens'], self.temperature)
-        nllqfromq = model.get_persample_nll(dumping_object['gen']['tokens'], self.temperature)
-        dumping_object['gen']['nllq'] = nllqfromq
+        nllqfromq = model.get_persample_nll(dumping_object['generated']['tokens'], self.temperature)
+        dumping_object['generated']['nllq'] = nllqfromq
         dumping_object['test']['nllq'] = nllqfromp
 
     def get_test_scores(self, samples: ModelSamples):

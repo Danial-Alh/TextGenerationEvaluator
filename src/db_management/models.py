@@ -1,38 +1,12 @@
+import datetime
+
+import mongoengine
 from mongoengine.document import Document, EmbeddedDocument
 from mongoengine.fields import (EmbeddedDocumentListField, EmbeddedDocumentField,
                                 FloatField, DateTimeField, IntField, StringField,
-                                ListField, MapField)
-import datetime
-# import db_management.setup
+                                ReferenceField, ListField, MapField)
 
-
-class Model(Document):
-    machine_name = StringField(required=True)
-    model_name = StringField(required=True)
-    dataset_name = StringField(required=True)
-    run = IntField()
-    restore_type = StringField()
-    temperature = StringField()
-
-    created_at = DateTimeField(required=True, default=datetime.datetime.now)
-    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
-
-    meta = {
-        'abstract': True,
-        # 'allow_inheritence': True
-    }
-    TEMP_META = {
-        'indexes': [
-            '#machine_name',
-            '#model_name',
-            '#dataset_name',
-            '#restore_type',
-            '+run',
-            '+temperature',
-            '-created_at',
-            '-updated_at',
-        ],
-    }
+import db_management.setup
 
 
 class MetricHistoryRecord(EmbeddedDocument):
@@ -43,12 +17,70 @@ class MetricHistoryRecord(EmbeddedDocument):
     updated_at = DateTimeField(required=True, default=datetime.datetime.now)
 
 
-class InTrainingEvaluationHistory(Model):
+class InTrainingEvaluationHistory(Document):
+    machine_name = StringField(required=True)
+    model_name = StringField(required=True)
+    dataset_name = StringField(required=True)
+    run = IntField(required=True)
+
     all_history = MapField(EmbeddedDocumentListField(MetricHistoryRecord))
     best_history = MapField(EmbeddedDocumentListField(MetricHistoryRecord))
 
+    created_at = DateTimeField(required=True, default=datetime.datetime.now)
+    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
+
+    meta = meta = {
+        'indexes': [
+            {
+                'fields': [
+                    'model_name',
+                    'dataset_name',
+                    '+run',
+                ],
+                'unique': True,
+            },
+            '#machine_name',
+            '#model_name',
+            '#dataset_name',
+            '+run',
+            '-created_at',
+            '-updated_at',
+        ],
+    }
+
+
+class Model(Document):
+    machine_name = StringField(required=True)
+    model_name = StringField(required=True)
+    dataset_name = StringField(required=True)
+    run = IntField(required=True)
+    restore_type = StringField(required=True)
+    temperature = StringField(required=True)
+
+    created_at = DateTimeField(required=True, default=datetime.datetime.now)
+    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
+
     meta = {
-        'indexes': Model.TEMP_META['indexes']
+        'indexes': [
+            '#machine_name',
+            '#model_name',
+            '#dataset_name',
+            '#restore_type',
+            '+run',
+            '+temperature',
+            '-created_at',
+            '-updated_at',
+            {
+                'fields': [
+                    'model_name',
+                    'dataset_name',
+                    'restore_type',
+                    '+run',
+                    '+temperature',
+                ],
+                'unique': True
+            }
+        ],
     }
 
 
@@ -57,30 +89,54 @@ class MetricResult(EmbeddedDocument):
     std = FloatField()
 
 
-class Sample(EmbeddedDocument):
+class Sample(Document):
+    model = ReferenceField(Model, required=True, reverse_delete_rule=mongoengine.DENY)
+
+    index = IntField(required=True)
+    origin = StringField()
+
     tokens = ListField(StringField(), required=True)
     sentence = StringField(required=True)
     metrics = MapField(EmbeddedDocumentField(MetricResult))
-    # other supplementary info can be placed here (dynamic fields)
-
-
-class ModelSamples(Model):
-    generated_samples = EmbeddedDocumentListField(Sample)
-    test_samples = EmbeddedDocumentListField(Sample)
 
     meta = {
-        'indexes': Model.TEMP_META['indexes']
+        'indexes': [
+            'model',
+            '+index',
+            '#origin',
+            {
+                'fields': [
+                    'model',
+                    '+index',
+                    'origin'
+                ],
+                'unique': True
+            }
+        ]
     }
 
+    def clean(self):
+        assert self.origin in ('test', 'generated')
 
-class ModelEvaluationResult(Model):
+
+class ModelEvaluationResult(Document):
+    model = ReferenceField(Model, required=True, reverse_delete_rule=mongoengine.DENY)
     metrics = MapField(EmbeddedDocumentField(MetricResult), required=True)
 
+    created_at = DateTimeField(required=True, default=datetime.datetime.now)
+    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
+
     meta = {
-        'indexes': Model.TEMP_META['indexes']
+        'indexes': [
+            'model',
+            '-created_at',
+            '-updated_at'
+        ]
     }
 
 
-print('InTrainingEvaluationHistory documents: {}'.format(InTrainingEvaluationHistory.objects().count()))
-print('ModelSamples documents: {}'.format(ModelSamples.objects().count()))
+print('InTrainingEvaluationHistory documents: {}'.format(
+    InTrainingEvaluationHistory.objects().count()))
+print('Model documents: {}'.format(Model.objects().count()))
+print('Sample documents: {}'.format(Sample.objects().count()))
 print('ModelEvaluationResult documents: {}'.format(ModelEvaluationResult.objects().count()))

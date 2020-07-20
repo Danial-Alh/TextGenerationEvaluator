@@ -86,10 +86,10 @@ class Evaluator:
         min_size = min(len(generated_tokens), len(test_tokens))
         generated_tokens, test_tokens = generated_tokens[:min_size], test_tokens[:min_size]
 
-        dumping_object = {'gen': {}, 'test': {}}
-        dumping_object['gen']['tokens'] = generated_tokens
+        dumping_object = {'generated': {}, 'test': {}}
+        dumping_object['generated']['tokens'] = generated_tokens
         dumping_object['test']['tokens'] = test_tokens
-        dumping_object['gen']['sentence'] = self.parser.detokenize(generated_tokens)
+        dumping_object['generated']['sentence'] = self.parser.detokenize(generated_tokens)
         dumping_object['test']['sentence'] = self.parser.detokenize(test_tokens)
 
         self.add_persample_metrics(dumping_object, model)

@@ -5,7 +5,7 @@ import numpy as np
 
 from db_management.models import (InTrainingEvaluationHistory,
                                   MetricHistoryRecord, MetricResult,
-                                  ModelEvaluationResult, ModelSamples,
+                                  ModelEvaluationResult, Model,
                                   Sample)
 from utils.file_handler import (create_folder_if_not_exists,
                                 unzip_file, zip_folder)
@@ -54,7 +54,7 @@ class ModelDumper:
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
-        ).order_by('-created_at').first()
+        ).get()
 
         for metric, value in new_metrics.items():
             if metric not in model_history.best_history:
@@ -67,7 +67,7 @@ class ModelDumper:
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
-        ).order_by('-created_at').first()
+        ).get()
 
         for metric, value in new_metrics.items():
             if metric not in model_history.all_history:
@@ -77,41 +77,46 @@ class ModelDumper:
         model_history.save()
 
     def dump_samples_with_persample_metrics(self, dumping_object: dict, restore_type, temperature):
-        def convert_dmpobj_to_db_sample(dmp_obj):
+        def convert_dmpobj_to_db_sample(dmp_obj, origin):
             return [
                 Sample(
-                    sentence=dmp_obj['sentence'][i],
-                    tokens=dmp_obj['tokens'][i],
+                    index=i,
+                    origin=origin,
+                    tokens=dmp_obj[origin]['tokens'][i],
+                    sentence=dmp_obj[origin]['sentence'][i],
                     metrics={key: MetricResult(value=value[i])
-                             for key, value in dmp_obj.items() if key not in ['sentence', 'tokens']}
+                             for key, value in dmp_obj[origin].items() if key not in ['sentence', 'tokens']}
                 )
-                for i in range(len(dmp_obj['sentence']))
+                for i in range(len(dmp_obj[origin]['sentence']))
             ]
 
         assert ModelDumper.persample_metrics_exist_for_each_sample(dumping_object)
 
-        model_samples = ModelSamples(
+        model = Model(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
-            generated_samples=[],
-            test_samples=[]
         )
 
-        model_samples.save()
+        model.save()
 
-        model_samples.generated_samples = convert_dmpobj_to_db_sample(dumping_object['gen'])
-        model_samples.test_samples = convert_dmpobj_to_db_sample(dumping_object['test'])
+        generated_samples = convert_dmpobj_to_db_sample(dumping_object, origin='generated')
+        test_samples = convert_dmpobj_to_db_sample(dumping_object, origin='test')
 
-        # model_samples.save(validate=False)
-        model_samples.save()
+        Sample.objects.insert(generated_samples)
+        Sample.objects.insert(test_samples)
 
     def update_persample_metrics_for_generated_samples(self, dumping_object: dict, restore_type, temperature):
-        model_samples = ModelSamples.objects(
+        from pymongo import UpdateOne
+
+        model = Model.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
-        ).order_by('-created_at').first()
+        ).get()
+
+        generated_samples = Sample.objects(model=model, origin='generated').order_by('+index')
+        new_metrics = [{} for _ in range(len(generated_samples))]
 
         for metric in dumping_object:
             if isinstance(dumping_object[metric], dict):
@@ -120,17 +125,24 @@ class ModelDumper:
             else:
                 ids = np.arange(len(dumping_object[metric]))
                 values = dumping_object[metric]
-                assert len(dumping_object[metric]) == len(model_samples.generated_samples)
-            for i, v in zip(ids, values):
-                model_samples.generated_samples[i].metrics[metric] = MetricResult(value=v)
+                assert len(dumping_object[metric]) == len(generated_samples)
 
-        model_samples.save()
+            for i, v in zip(ids, values):
+                new_metrics[i]['metrics.{}'.format(metric)] = {'value': v}
+
+        update_operations = [
+            UpdateOne(
+                {'_id': generated_samples[i].id}, {'$set': nm}
+            )
+            for i, nm in enumerate(new_metrics) if len(new_metrics) != 0
+        ]
+        Sample._get_collection().bulk_write(update_operations, ordered=False)
 
     def load_samples_with_persample_metrics(self, restore_type, temperature):
         result = ModelSamples.objects(
             model_name=self.model.get_name(), dataset_name=self.dm_name,
             run=self.run, restore_type=restore_type,
-            temperature=self.get_temperature_stringified(temperature)).order_by('-created_at').first()
+            temperature=self.get_temperature_stringified(temperature)).get()
         return result
 
     def dump_final_evaluation_results(self, dumping_object: dict, restore_type, temperature):
