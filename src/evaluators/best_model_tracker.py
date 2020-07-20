@@ -1,4 +1,4 @@
-from previous_works import create_model
+from previous_works.model_wrappers import create_model
 
 # from .base_evaluator import Evaluator
 from .model_dumper import ModelDumper
@@ -8,11 +8,10 @@ class BestModelTracker:
     def __init__(self, model_name, run, evaluator):
         self.run = run
         self.evaluator = evaluator
-        
+
         self.model = create_model(model_name, evaluator.parser)
         self.model.set_tracker(self)
         self.model.delete_saved_model()
-        self.model.init_model()
 
         self.dumper = ModelDumper(self.model, self.run, evaluator.dm_name)
         self.best_history = None
@@ -43,4 +42,5 @@ class BestModelTracker:
         initial_scores = self.evaluator.get_initial_scores_during_training()
         self.dumper.init_history(initial_scores)
         self.best_history = {metric: [v] for metric, v in initial_scores.items()}
-        self.model.train(self.evaluator.train_ds.text)
+        self.model.init_model((self.evaluator.train_ds.text, self.evaluator.valid_ds.text))
+        self.model.train()

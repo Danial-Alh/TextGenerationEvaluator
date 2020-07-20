@@ -1,7 +1,7 @@
 from torchtext.data import ReversibleField
 
 from previous_works.model_wrappers.base_model import (BaseModel,
-                                                      data2tempfile_decorator,
+                                                      data2file_decorator,
                                                       empty_sentence_remover_decorator,
                                                       remove_extra_rows)
 
@@ -40,7 +40,9 @@ class TexyGen(BaseModel):
         self.model_class = gans[gan_name.lower()]
         self.dataloader_class = dls[gan_name.lower()]
 
-    def init_model(self):
+    @data2file_decorator(delete_tempfile=False)
+    def init_model(self, train_samples, valid_samples, train_samples_loc, valid_samples_loc):
+        super.init_model(train_samples, valid_samples, train_samples_loc, valid_samples_loc)
         self.model = self.model_class()
         self.model.init_real_trainng(self.parser)
         self.load()
@@ -48,9 +50,8 @@ class TexyGen(BaseModel):
     # def set_train_val_data(self, train_data, valid_data):
     #     super().set_train_val_data(train_data, valid_data)
 
-    @data2tempfile_decorator
-    def train(self, samples, samples_loc):
-        self.model.train_real(samples_loc, self)
+    def train(self):
+        self.model.train_real(self.train_samples_loc, self)
         self.tracker.update_metrics(last_iter=True)
 
     @empty_sentence_remover_decorator
@@ -66,7 +67,7 @@ class TexyGen(BaseModel):
                                      temperature=temperature)
         return codes
 
-    def init_nll(self, data_loc, temperature):
+    def __init_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.Nll import Nll
         valid_dataloader = self.dataloader_class(batch_size=self.model.batch_size,
                                                  seq_length=self.parser.max_length)
@@ -77,7 +78,7 @@ class TexyGen(BaseModel):
         inll.set_name('nll-test-' + data_loc)
         return inll
 
-    def init_persample_nll(self, data_loc, temperature):
+    def __init_persample_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.ItemFetcher import ItemFetcher
         dataloader = self.dataloader_class(batch_size=self.model.batch_size,
                                            seq_length=self.parser.max_length)
@@ -96,16 +97,16 @@ class TexyGen(BaseModel):
         inll.set_name('persample_ll' + data_loc)
         return inll
 
-    @data2tempfile_decorator
+    @data2file_decorator(delete_tempfile=True)
     def get_nll(self, samples, samples_loc, temperature):
-        nll = self.init_nll(samples_loc, temperature)
+        nll = self.__init_nll(samples_loc, temperature)
         score = nll.get_score()
         return float(score)
 
     @remove_extra_rows
-    @data2tempfile_decorator
+    @data2file_decorator(delete_tempfile=True)
     def get_persample_nll(self, samples, samples_loc, temperature):
-        persample_nll = self.init_persample_nll(samples_loc, temperature)
+        persample_nll = self.__init_persample_nll(samples_loc, temperature)
         score = persample_nll.get_score()
         return [float(s) for s in score]
 

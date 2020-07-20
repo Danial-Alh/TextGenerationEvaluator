@@ -81,6 +81,6 @@ class ModelEvaluationResult(Model):
     }
 
 
-print('InTrainingEvaluationHistory documents: {}'.format(len(InTrainingEvaluationHistory.objects())))
-print('ModelSamples documents: {}'.format(len(ModelSamples.objects())))
-print('ModelEvaluationResult documents: {}'.format(len(ModelEvaluationResult.objects())))
+print('InTrainingEvaluationHistory documents: {}'.format(InTrainingEvaluationHistory.objects().count()))
+print('ModelSamples documents: {}'.format(ModelSamples.objects().count()))
+print('ModelEvaluationResult documents: {}'.format(ModelEvaluationResult.objects().count()))

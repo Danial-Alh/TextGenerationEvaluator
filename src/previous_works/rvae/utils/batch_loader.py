@@ -9,7 +9,7 @@ from .functional import *
 
 
 class BatchLoader:
-    def __init__(self, path='../../', data_files=None):
+    def __init__(self, path='../', data_files=None):
 
         '''
             :properties
@@ -74,17 +74,17 @@ class BatchLoader:
         '''
 
         if data_files is None:
-            data_files = [path + 'data/train.txt',
-                          path + 'data/test.txt']
+            data_files = [path + '__data/train.txt',
+                          path + '__data/test.txt']
         self.data_files = data_files
 
-        self.idx_files = [path + 'saved/words_vocab.pkl',
-                          path + 'saved/characters_vocab.pkl']
+        self.idx_files = [path + '__saved/words_vocab.pkl',
+                          path + '__saved/characters_vocab.pkl']
 
-        self.tensor_files = [[path + 'saved/train_word_tensor.npy',
-                              path + 'saved/valid_word_tensor.npy'],
-                             [path + 'saved/train_character_tensor.npy',
-                              path + 'saved/valid_character_tensor.npy']]
+        self.tensor_files = [[path + '__saved/train_word_tensor.npy',
+                              path + '__saved/valid_word_tensor.npy'],
+                             [path + '__saved/train_character_tensor.npy',
+                              path + '__saved/valid_character_tensor.npy']]
 
         self.blind_symbol = ''
         self.pad_token = '_'

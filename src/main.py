@@ -3,20 +3,21 @@ import argparse
 from data_management.data_manager import load_oracle_dataset, load_real_dataset
 from evaluators import BestModelTracker
 from evaluators.base_evaluator import Evaluator
-from previous_works import all_models
+from previous_works.model_wrappers import all_models
 
 arg_parser = argparse.ArgumentParser()
 
 arg_parser.add_argument('-m', '--mode', type=str, help='real(world)/oracle mode',
-                    choices=['real', 'oracle'])
+                        choices=['real', 'oracle'])
 arg_parser.add_argument('-d', '--data', type=str, help='dataset name', required=True)
 arg_parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate)',
-                    choices=['train', 'gen', 'eval', 'export'], required=True)
+                        choices=['train', 'gen', 'eval', 'export'], required=True)
 arg_parser.add_argument('-R', '--runs', type=int, help='The run number', nargs='+')
 arg_parser.add_argument('--temper_mode', type=str, help='biased/unbiased temperature mode',
-                    choices=['unbiased', 'biased'], default='biased')
+                        choices=['unbiased', 'biased'], default='biased')
 arg_parser.add_argument('-t', '--temperatures', type=float, help='softmax temperatures', nargs='+')
-arg_parser.add_argument('-M', '--models', type=str, help='model names', nargs='+', choices=all_models)
+arg_parser.add_argument('-M', '--models', type=str, help='model names',
+                        nargs='+', choices=all_models)
 arg_parser.add_argument('-r', '--restores', type=str, help='restore types', nargs='+')
 args = arg_parser.parse_args()
 
@@ -65,12 +66,11 @@ if args.action == 'train':
 
 
 elif args.action == 'gen':
-    del trn, vld
     for temperature in args.temperatures:
         for model_name, run, restore_type in model_run_restore_zip:
             print('********************* sample generation run: {}, restore_type: {}, temperature: {} *********************'.
                   format(run, restore_type, temperature))
-            ev = EvaluatorClass(None, None, tst, parser=TEXT, mode=args.action,
+            ev = EvaluatorClass(trn, vld, tst, parser=TEXT, mode=args.action,
                                 temperature=temperature, dm_name=args.data)
             ev.generate_samples(model_name, run, restore_type)
 

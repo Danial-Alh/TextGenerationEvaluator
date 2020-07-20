@@ -1,5 +1,5 @@
 from db_management.models import ModelSamples
-from previous_works import create_model
+from previous_works.model_wrappers import create_model
 from previous_works.model_wrappers.base_model import BaseModel
 from utils.path_configs import BERT_PATH as B_P
 
@@ -70,7 +70,7 @@ class Evaluator:
         if model_name != 'real':
             model = create_model(model_name, self.parser)
             model.delete_saved_model()
-            model.init_model()
+            model.init_model((self.train_ds.text, self.valid_ds.text))
             dumper = ModelDumper(model, run, self.dm_name)
             dumper.restore_model(restore_type)
 

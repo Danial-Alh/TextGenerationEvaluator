@@ -1,7 +1,9 @@
 import os
 import shutil
-from torchtext.data import ReversibleField
+from functools import wraps
+
 import torch
+from torchtext.data import ReversibleField
 
 from data_management.data_manager import load_real_dataset
 from utils.file_handler import delete_file, write_text
@@ -9,6 +11,7 @@ from utils.path_configs import TEMP_PATH
 
 
 def empty_sentence_remover_decorator(func):
+    @wraps(func)
     def wrapper(self, n_samples, *args, **kwargs):
         print('generating {} samples from {}!'.format(n_samples, self.get_name()))
         result = func(self, n_samples, *args, **kwargs)
@@ -21,21 +24,43 @@ def empty_sentence_remover_decorator(func):
     return wrapper
 
 
-def data2tempfile_decorator(func):
-    def wrapper(self, samples, *args, **kwargs):
-        assert samples is not None
+def convert_and_write_samples_to_temp_file(samples, file_name, parser):
+    assert samples is not None
 
-        samples = self.parser.pad(samples)
-        samples = self.parser.numericalize(samples)
+    samples = parser.pad(samples)
+    samples = parser.numericalize(samples)
 
-        stringified_samples = [' '.join(map(str, s)) for s in samples.tolist()]
-        samples_loc = write_text(stringified_samples, '{}_{}'.format(self.get_name(), func.__name__),
-                                 TEMP_PATH)
-        result = func(self, samples, samples_loc, *args, **kwargs)
-        delete_file(samples_loc)
-        return result
+    stringified_samples = [' '.join(map(str, s)) for s in samples.tolist()]
+    samples_loc = write_text(stringified_samples, file_name, TEMP_PATH)
+    return samples_loc
 
-    return wrapper
+
+def data2file_decorator(delete_tempfile: bool):
+
+    def inner_decorator(func):
+        @wraps(func)
+        def wrapper(self, samples, *args, **kwargs):
+            if not isinstance(samples, tuple):
+                samples = (samples,)
+            samples_locs = [
+                convert_and_write_samples_to_temp_file
+                (
+                    s,
+                    '{}_{}_{}'.format(self.get_name(), func.__name__, i),
+                    self.parser
+                )
+                for i, s in enumerate(samples)
+            ]
+
+            result = func(self, *samples, *samples_locs, *args, **kwargs)
+
+            if delete_tempfile:
+                for s in samples_locs:
+                    delete_file(s)
+            return result
+        return wrapper
+
+    return inner_decorator
 
 
 def remove_extra_rows(func):
@@ -65,10 +90,10 @@ class BaseModel:
         #     delete_file(self.valid_loc)
         pass
 
-    def update_metrics(self, epoch_num):
-        print('evaluator called %d!' % epoch_num)
+    def update_metrics(self, epoch):
+        print('evaluator called %d!' % epoch)
         assert self.tracker is not None, 'Evaluator is none!'
-        self.tracker.update_metrics(epoch_num)
+        self.tracker.update_metrics(epoch=epoch)
 
     def set_tracker(self, dumper):
         self.tracker = dumper
@@ -82,22 +107,25 @@ class BaseModel:
         self.valid_loc = write_text([' '.join(list(map(str, s))) for s in valid_data],
                                     self.get_name() + '_valid', TEMP_PATH)
 
-    def init_model(self):
-        pass
+    def init_model(self, train_samples, valid_samples, train_samples_loc, valid_samples_loc):
+        self.train_samples = train_samples
+        self.train_samples_loc = train_samples_loc
+        self.valid_samples = valid_samples
+        self.valid_samples_loc = valid_samples_loc
 
-    def train(self, samples, samples_loc):
+    def train(self):
         pass
 
     @empty_sentence_remover_decorator
     def generate_samples(self, n_samples, temperature):
         pass
 
-    @data2tempfile_decorator
+    @data2file_decorator(delete_tempfile=True)
     def get_nll(self, samples, samples_loc, temperature):
         pass
 
     @remove_extra_rows
-    @data2tempfile_decorator
+    @data2file_decorator(delete_tempfile=True)
     def get_persample_nll(self, samples, samples_loc, temperature):
         pass
 
@@ -107,8 +135,9 @@ class BaseModel:
     def delete_saved_model(self):
         if os.path.exists(self.get_saving_path()):
             shutil.rmtree(self.get_saving_path())
-            os.mkdir(self.get_saving_path())
             print("saved model at %s deleted!" % self.get_saving_path())
+        os.mkdir(self.get_saving_path())
+        print("saving path created at %s!" % self.get_saving_path())
 
     def get_saving_path(self):
         pass
@@ -121,5 +150,5 @@ class BaseModel:
 
 
 if __name__ == '__main__':
-    train_ds, valid_ds, test_ds, parser = load_real_dataset('coco')
+    train_ds, valid_ds, test_ds, TEXT = load_real_dataset('coco')
     print(train_ds[0].text)
