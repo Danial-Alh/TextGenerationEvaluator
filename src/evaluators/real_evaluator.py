@@ -22,11 +22,11 @@ class RealWorldEvaluator(Evaluator):
     def init_metrics(self, mode):
         if mode == 'train':
             print(len(self.train_ds), len(self.valid_ds))
-            valid_sentences = self.parser.detokenize(self.valid_ds.text)
+            valid_sentences = self.parser.detokenize(self.valid_ds.text)[:100]
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
         elif mode == 'eval':
             test_sentences = self.parser.detokenize(self.test_ds.text)
-            self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)
+            self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)[:100]
             self.multiset_distances = MultisetDistances(test_sentences, min_n=2, max_n=5,
                                                         parser=self.parser, parse=False)
             self.fbd = FBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)

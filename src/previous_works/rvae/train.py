@@ -2,6 +2,7 @@ import argparse
 import inspect
 import os
 from types import SimpleNamespace
+from tqdm.auto import tqdm, trange
 
 import numpy as np
 import torch as t
@@ -26,13 +27,16 @@ CURRENT_ROOT_PATH = os.path.abspath(
 SAVING_PATH = CURRENT_ROOT_PATH + '__saved/'
 
 
-def create_batchloader(train_samples_loc, valid_samples_loc):
+def create_batchloader(train_samples_loc, valid_samples_loc, parser):
     batch_loader = BatchLoader(
         CURRENT_ROOT_PATH,
         data_files=[
             train_samples_loc,
             valid_samples_loc
-        ]
+        ],
+        pad_token=str(parser.vocab.stoi[parser.pad_token]),
+        go_token=str(parser.vocab.stoi[parser.init_token]),
+        end_token=str(parser.vocab.stoi[parser.eos_token]),
     )
     return batch_loader
 
@@ -51,6 +55,8 @@ def create_parameters(batch_loader=None):
 
 def create_model(parameters):
     rvae = RVAE(parameters)
+    if t.cuda.is_available():
+        rvae = rvae.cuda()
     return rvae
 
 
@@ -85,7 +91,7 @@ def train(rvae, batch_loader, parameters, wrapper):
     args = SimpleNamespace(
         num_iterations=120000,
         batch_size=32,
-        use_cuda=False,
+        use_cuda=t.cuda.is_available(),
         learning_rate=5e-5,
         dropout=0.3,
         use_trained=False,
@@ -105,53 +111,55 @@ def train(rvae, batch_loader, parameters, wrapper):
 
     ce_result = []
     kld_result = []
+    epoch = 0
+    N_EPOCHS = 80
+    num_batches = batch_loader.num_lines[0] // args.batch_size + 1
 
-    for iteration in range(args.num_iterations):
+    for iteration in trange(N_EPOCHS):
+        for _iteration in trange(num_batches):
+            iteration = epoch * num_batches + _iteration
 
-        cross_entropy, kld, coef = train_step(
-            iteration, args.batch_size, args.use_cuda, args.dropout)
+            cross_entropy, kld, coef = train_step(
+                iteration, args.batch_size, args.use_cuda, args.dropout)
 
-        if iteration % 5 == 0:
-            print('\n')
-            print('------------TRAIN-------------')
-            print('----------ITERATION-----------')
-            print(iteration)
-            print('--------CROSS-ENTROPY---------')
-            print(cross_entropy.data.cpu().numpy())
-            print('-------------KLD--------------')
-            print(kld.data.cpu().numpy())
-            print('-----------KLD-coef-----------')
-            print(coef)
-            print('------------------------------')
-            wrapper.update_metrics(epoch=iteration+1)
+            if iteration % (num_batches//4) == 0:
+                print('\n')
+                print('------------TRAIN-------------')
+                print('----------ITERATION-----------')
+                print(iteration)
+                print('--------CROSS-ENTROPY---------')
+                print(cross_entropy.data.cpu().numpy())
+                print('-------------KLD--------------')
+                print(kld.data.cpu().numpy())
+                print('-----------KLD-coef-----------')
+                print(coef)
+                print('------------------------------')
 
-        if iteration % 10 == 0:
-            cross_entropy, kld = validate(args.batch_size, args.use_cuda)
+        cross_entropy, kld = validate(args.batch_size, args.use_cuda)
 
-            cross_entropy = cross_entropy.data.cpu().numpy()
-            kld = kld.data.cpu().numpy()
+        cross_entropy = cross_entropy.data.cpu().numpy()
+        kld = kld.data.cpu().numpy()
 
-            print('\n')
-            print('------------VALID-------------')
-            print('--------CROSS-ENTROPY---------')
-            print(cross_entropy)
-            print('-------------KLD--------------')
-            print(kld)
-            print('------------------------------')
+        print('\n')
+        print('------------VALID-------------')
+        print('--------CROSS-ENTROPY---------')
+        print(cross_entropy)
+        print('-------------KLD--------------')
+        print(kld)
+        print('------------------------------')
 
-            ce_result += [cross_entropy]
-            kld_result += [kld]
-
-        if iteration % 20 == 0:
-            seed = np.random.normal(size=[1, parameters.latent_variable_size])
-
-            sample = rvae.sample(batch_loader, 50, seed, args.use_cuda)
-
-            print('\n')
-            print('------------SAMPLE------------')
-            print('------------------------------')
-            print(sample)
-            print('------------------------------')
+        ce_result += [cross_entropy]
+        kld_result += [kld]
+        samples = sample(rvae, batch_loader, 1,  wrapper.parser.max_length)
+        samples = [list(map(int, l)) for l in samples]
+        samples = t.tensor(samples)
+        samples = wrapper.parser.reverse(samples)
+        print('\n')
+        print('------------SAMPLE------------')
+        print('------------------------------')
+        print(samples[0])
+        print('------------------------------')
+        wrapper.update_metrics(epoch=epoch+1)
 
     t.save(rvae.state_dict(), CURRENT_ROOT_PATH + 'saved/trained_RVAE')
 
@@ -161,7 +169,7 @@ def train(rvae, batch_loader, parameters, wrapper):
 
 def sample(rvae, batch_loader, n_samples, seq_len):
     with t.no_grad():
-        use_cuda = next(rvae.parameters()).device == 'cuda'
+        use_cuda = t.cuda.is_available()
         seed = np.random.normal(size=[n_samples, rvae.params.latent_variable_size])
 
         seed = Variable(t.from_numpy(seed).float())
@@ -180,7 +188,7 @@ def sample(rvae, batch_loader, n_samples, seq_len):
 
         initial_state = None
 
-        for i in range(seq_len):
+        for i in trange(seq_len):
             logits, initial_state, _ = rvae(0., None, None,
                                             decoder_word_input, decoder_character_input,
                                             seed, initial_state)
@@ -194,6 +202,6 @@ def sample(rvae, batch_loader, n_samples, seq_len):
 
     result_ids = t.stack(result_ids, dim=1)
     result_ids = result_ids.tolist()
-    result = [[batch_loader.idx_to_word[xx.item()] for xx in x] for x in result_ids]
+    result = [[batch_loader.idx_to_word[xx] for xx in x] for x in result_ids]
 
     return result

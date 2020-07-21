@@ -19,7 +19,7 @@ class VAE(BaseModel):
     def init_model(self, train_samples, valid_samples, train_samples_loc, valid_samples_loc):
         super().init_model(train_samples, valid_samples, train_samples_loc, valid_samples_loc)
         from previous_works.rvae.train import create_model as crm, create_batchloader as crb, create_parameters as crp
-        self.batchloader = crb(train_samples_loc, valid_samples_loc)
+        self.batchloader = crb(train_samples_loc, valid_samples_loc, self.parser)
         self.parameters = crp(self.batchloader)
         self.model = crm(self.parameters)
 

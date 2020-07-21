@@ -9,7 +9,8 @@ from .functional import *
 
 
 class BatchLoader:
-    def __init__(self, path='../', data_files=None):
+    def __init__(self, path='../', data_files=None,
+                 pad_token='_', go_token='>', end_token='|'):
         '''
             :properties
 
@@ -86,9 +87,9 @@ class BatchLoader:
                               path + '__saved/valid_character_tensor.npy']]
 
         self.blind_symbol = ''
-        self.pad_token = '_'
-        self.go_token = '>'
-        self.end_token = '|'
+        self.pad_token = pad_token
+        self.go_token = go_token
+        self.end_token = end_token
 
         idx_exists = fold(f_and,
                           [os.path.exists(file) for file in self.idx_files],
@@ -147,6 +148,7 @@ class BatchLoader:
 
         # unique characters with blind symbol
         chars = list(set(data)) + [self.blind_symbol, self.pad_token, self.go_token, self.end_token]
+        chars = list(set(chars))
         chars_vocab_size = len(chars)
 
         # mappings itself
@@ -163,6 +165,7 @@ class BatchLoader:
         # Mapping from index to word
         idx_to_word = [x[0] for x in word_counts.most_common()]
         idx_to_word = list(sorted(idx_to_word)) + [self.pad_token, self.go_token, self.end_token]
+        idx_to_word = list(set(idx_to_word))
 
         words_vocab_size = len(idx_to_word)
 
@@ -197,13 +200,13 @@ class BatchLoader:
         self.word_tensor = np.array(
             [[list(map(self.word_to_idx.get, line)) for line in target] for target in data_words])
         print(self.word_tensor.shape)
-        for i, path in enumerate(tensor_files[0]):
-            np.save(path, self.word_tensor[i])
+        # for i, path in enumerate(tensor_files[0]):
+        #     np.save(path, self.word_tensor[i])
 
         self.character_tensor = np.array(
             [[list(map(self.encode_characters, line)) for line in target] for target in data_words])
-        for i, path in enumerate(tensor_files[1]):
-            np.save(path, self.character_tensor[i])
+        # for i, path in enumerate(tensor_files[1]):
+        #     np.save(path, self.character_tensor[i])
 
         self.just_words = [word for line in self.word_tensor[0] for word in line]
 
@@ -241,11 +244,14 @@ class BatchLoader:
         max_input_seq_len = np.amax(input_seq_len)
 
         encoded_words = [[idx for idx in line] for line in encoder_word_input]
-        decoder_word_input = [[self.word_to_idx[self.go_token]] +
-                              line for line in encoder_word_input]
-        decoder_character_input = [[self.encode_characters(
-            self.go_token)] + line for line in encoder_character_input]
-        decoder_output = [line + [self.word_to_idx[self.end_token]] for line in encoded_words]
+        # decoder_word_input = [[self.word_to_idx[self.go_token]] +
+        #                       line for line in encoder_word_input]
+        # decoder_character_input = [[self.encode_characters(
+        #     self.go_token)] + line for line in encoder_character_input]
+        # decoder_output = [line + [self.word_to_idx[self.end_token]] for line in encoded_words]
+        decoder_word_input = encoded_words
+        decoder_character_input = encoder_character_input
+        decoder_output = encoded_words
 
         # sorry
         for i, line in enumerate(decoder_word_input):
