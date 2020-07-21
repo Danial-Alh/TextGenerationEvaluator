@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch as t
+import torch.functional as F
+from torch.autograd import Variable
 from torch.optim import Adam
 
 from previous_works.rvae.utils.batch_loader import BatchLoader
@@ -155,3 +157,43 @@ def train(rvae, batch_loader, parameters, wrapper):
 
     # np.save(CURRENT_ROOT_PATH + 'ce_result_{}.npy'.format(args.ce_result), np.array(ce_result))
     # np.save(CURRENT_ROOT_PATH + 'kld_result_npy_{}'.format(args.kld_result), np.array(kld_result))
+
+
+def sample(rvae, batch_loader, n_samples, seq_len):
+    with t.no_grad():
+        use_cuda = next(rvae.parameters()).device == 'cuda'
+        seed = np.random.normal(size=[n_samples, rvae.params.latent_variable_size])
+
+        seed = Variable(t.from_numpy(seed).float())
+        if use_cuda:
+            seed = seed.cuda()
+
+        decoder_word_input_np, decoder_character_input_np = batch_loader.go_input(n_samples)
+
+        decoder_word_input = Variable(t.from_numpy(decoder_word_input_np).long())
+        decoder_character_input = Variable(t.from_numpy(decoder_character_input_np).long())
+
+        if use_cuda:
+            decoder_word_input, decoder_character_input = decoder_word_input.cuda(), decoder_character_input.cuda()
+
+        result_ids = []
+
+        initial_state = None
+
+        for i in range(seq_len):
+            logits, initial_state, _ = rvae(0., None, None,
+                                            decoder_word_input, decoder_character_input,
+                                            seed, initial_state)
+            logits = logits[:, -1].view(-1, rvae.params.word_vocab_size)
+            decoder_word_input = t.multinomial(t.sigmoid(logits).cpu(), 1,)
+
+            result_ids.append(decoder_word_input[:, 0])
+
+            if use_cuda:
+                decoder_word_input, decoder_character_input = decoder_word_input.cuda(), decoder_character_input.cuda()
+
+    result_ids = t.stack(result_ids, dim=1)
+    result_ids = result_ids.tolist()
+    result = [[batch_loader.idx_to_word[xx.item()] for xx in x] for x in result_ids]
+
+    return result

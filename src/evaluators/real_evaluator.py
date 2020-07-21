@@ -1,11 +1,13 @@
+from typing import List
 import numpy as np
 from torchtext.data import ReversibleField
 
 from metrics.bert_distances import EMBD, FBD
 from metrics.bleus import Bleu, SelfBleu
 from metrics.multiset_distances import MultisetDistances
-from db_management.models import ModelSamples
 from previous_works.model_wrappers.base_model import BaseModel
+
+from db_management.models import Sample, Model
 
 from .base_evaluator import Evaluator
 
@@ -62,9 +64,10 @@ class RealWorldEvaluator(Evaluator):
         dumping_object['generated']['nllq'] = nllqfromq
         dumping_object['test']['nllq'] = nllqfromp
 
-    def get_test_scores(self, samples: ModelSamples):
+    def get_test_scores(self, db_model: Model,
+                        test_samples: List[Sample], generated_samples: List[Sample]):
         # generated_tokens = [r.tokens for r in samples.generated_samples]
-        generated_sentences = [r.sentence for r in samples.generated_samples]
+        generated_sentences = [r.sentence for r in generated_samples]
 
         if self.SELFBLEU_N_S == -1 or self.SELFBLEU_N_S > len(generated_sentences):
             subsampled_sentences = generated_sentences
@@ -77,15 +80,15 @@ class RealWorldEvaluator(Evaluator):
         bleu_result = self.bleu.get_score(generated_sentences, parse=False)[1]
         selfbleu_result = SelfBleu(subsampled_sentences, 2, 5, self.parser, parse=False)\
             .get_score()[1]
-        jaccard_result = self.multiset_distances.get_score(
-            'jaccard', generated_sentences, parse=False)
+        jaccard_result = self.multiset_distances\
+            .get_score('jaccard', generated_sentences, parse=False)
         fbd_result = self.fbd.get_score(generated_sentences)
         embd_result = self.embd.get_score(generated_sentences)
 
         persample_scores = {}
 
         mean_scores = {
-            'nll': np.mean([r.metrics['nllq'].value for r in samples.test_samples]),
+            'nll': np.mean([r.metrics['nllq'].value for r in test_samples]),
             'fbd': fbd_result,
             'embd': embd_result
         }

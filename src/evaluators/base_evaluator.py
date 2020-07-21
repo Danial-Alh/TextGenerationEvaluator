@@ -1,7 +1,9 @@
-from db_management.models import ModelSamples
+from typing import List
 from previous_works.model_wrappers import create_model
 from previous_works.model_wrappers.base_model import BaseModel
 from utils.path_configs import BERT_PATH as B_P
+
+from db_management.models import Sample, Model
 
 from .model_dumper import ModelDumper
 
@@ -58,7 +60,8 @@ class Evaluator:
     def get_during_training_scores(self, model: BaseModel):
         pass
 
-    def get_test_scores(self, samples: ModelSamples):
+    def get_test_scores(self, db_model: Model,
+                        test_samples: List[Sample], generated_samples: List[Sample]):
         pass
 
     def generate_samples(self, model_name, run, restore_type):

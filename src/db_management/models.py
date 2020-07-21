@@ -6,7 +6,7 @@ from mongoengine.fields import (EmbeddedDocumentListField, EmbeddedDocumentField
                                 FloatField, DateTimeField, IntField, StringField,
                                 ReferenceField, ListField, MapField)
 
-import db_management.setup
+# import db_management.setup
 
 
 class MetricHistoryRecord(EmbeddedDocument):

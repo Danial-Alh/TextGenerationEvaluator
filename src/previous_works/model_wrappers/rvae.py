@@ -30,12 +30,8 @@ class VAE(BaseModel):
 
     @empty_sentence_remover_decorator
     def generate_samples(self, n_samples, temperature):
-        samples = []
-        for iteration in range(n_samples):
-            seed = np.random.normal(size=[1, self.parameters.latent_variable_size])
-            result = self.model.sample(self.batchloader, 50, seed,
-                                       next(self.model.parameters()).device == 'cuda')
-            samples.append(result)
+        from previous_works.rvae.train import sample as smp
+        samples = smp(self.model, self.batchloader, n_samples, self.parser.max_length)
         return samples
 
     @data2file_decorator(delete_tempfile=True)

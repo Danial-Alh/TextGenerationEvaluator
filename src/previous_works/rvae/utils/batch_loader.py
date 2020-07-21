@@ -10,7 +10,6 @@ from .functional import *
 
 class BatchLoader:
     def __init__(self, path='../', data_files=None):
-
         '''
             :properties
 
@@ -177,7 +176,8 @@ class BatchLoader:
         data = [open(file, "r").read() for file in data_files]
         merged_data = data[0] + '\n' + data[1]
 
-        self.chars_vocab_size, self.idx_to_char, self.char_to_idx = self.build_character_vocab(merged_data)
+        self.chars_vocab_size, self.idx_to_char, self.char_to_idx = self.build_character_vocab(
+            merged_data)
 
         with open(idx_files[1], 'wb') as f:
             cPickle.dump(self.idx_to_char, f)
@@ -185,7 +185,8 @@ class BatchLoader:
         data_words = [[line.split() for line in target.split('\n')] for target in data]
         merged_data_words = merged_data.split()
 
-        self.words_vocab_size, self.idx_to_word, self.word_to_idx = self.build_word_vocab(merged_data_words)
+        self.words_vocab_size, self.idx_to_word, self.word_to_idx = self.build_word_vocab(
+            merged_data_words)
         self.max_word_len = np.amax([len(word) for word in self.idx_to_word])
         self.max_seq_len = np.amax([len(line) for target in data_words for line in target])
         self.num_lines = [len(target) for target in data_words]
@@ -213,9 +214,11 @@ class BatchLoader:
         self.max_seq_len = np.amax([len(line) for target in data_words for line in target])
         self.num_lines = [len(target) for target in data_words]
 
-        [self.idx_to_word, self.idx_to_char] = [cPickle.load(open(file, "rb")) for file in idx_files]
+        [self.idx_to_word, self.idx_to_char] = [
+            cPickle.load(open(file, "rb")) for file in idx_files]
 
-        [self.words_vocab_size, self.chars_vocab_size] = [len(idx) for idx in [self.idx_to_word, self.idx_to_char]]
+        [self.words_vocab_size, self.chars_vocab_size] = [
+            len(idx) for idx in [self.idx_to_word, self.idx_to_char]]
 
         [self.word_to_idx, self.char_to_idx] = [dict(zip(idx, range(len(idx)))) for idx in
                                                 [self.idx_to_word, self.idx_to_char]]
@@ -238,8 +241,10 @@ class BatchLoader:
         max_input_seq_len = np.amax(input_seq_len)
 
         encoded_words = [[idx for idx in line] for line in encoder_word_input]
-        decoder_word_input = [[self.word_to_idx[self.go_token]] + line for line in encoder_word_input]
-        decoder_character_input = [[self.encode_characters(self.go_token)] + line for line in encoder_character_input]
+        decoder_word_input = [[self.word_to_idx[self.go_token]] +
+                              line for line in encoder_word_input]
+        decoder_character_input = [[self.encode_characters(
+            self.go_token)] + line for line in encoder_character_input]
         decoder_output = [line + [self.word_to_idx[self.end_token]] for line in encoded_words]
 
         # sorry
@@ -266,10 +271,12 @@ class BatchLoader:
         for i, line in enumerate(encoder_character_input):
             line_len = input_seq_len[i]
             to_add = max_input_seq_len - line_len
-            encoder_character_input[i] = [self.encode_characters(self.pad_token)] * to_add + line[::-1]
+            encoder_character_input[i] = [self.encode_characters(
+                self.pad_token)] * to_add + line[::-1]
 
         return np.array(encoder_word_input), np.array(encoder_character_input), \
-               np.array(decoder_word_input), np.array(decoder_character_input), np.array(decoder_output)
+            np.array(decoder_word_input), np.array(
+                decoder_character_input), np.array(decoder_output)
 
     def next_embedding_seq(self, seq_len):
         """
