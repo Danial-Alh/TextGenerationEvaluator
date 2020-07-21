@@ -48,6 +48,10 @@ class InTrainingEvaluationHistory(Document):
         ],
     }
 
+    def clean(self):
+        self.model_name = self.model_name.lower()
+        self.dataset_name = self.dataset_name.lower()
+
 
 class Model(Document):
     machine_name = StringField(required=True)
@@ -83,6 +87,12 @@ class Model(Document):
         ],
     }
 
+    def clean(self):
+        self.model_name = self.model_name.lower()
+        self.dataset_name = self.dataset_name.lower()
+        self.restore_type = self.restore_type.lower()
+        self.temperature = self.temperature.lower()
+
 
 class MetricResult(EmbeddedDocument):
     value = FloatField(required=True)
@@ -90,7 +100,7 @@ class MetricResult(EmbeddedDocument):
 
 
 class Sample(Document):
-    model = ReferenceField(Model, required=True, reverse_delete_rule=mongoengine.DENY)
+    model = ReferenceField(Model, required=True, reverse_delete_rule=mongoengine.CASCADE)
 
     index = IntField(required=True)
     origin = StringField()
@@ -116,11 +126,13 @@ class Sample(Document):
     }
 
     def clean(self):
+        self.origin = self.origin.lower()
         assert self.origin in ('test', 'generated')
 
 
 class ModelEvaluationResult(Document):
-    model = ReferenceField(Model, required=True, reverse_delete_rule=mongoengine.DENY)
+    model = ReferenceField(Model, required=True,
+                           reverse_delete_rule=mongoengine.CASCADE, unique=True)
     metrics = MapField(EmbeddedDocumentField(MetricResult), required=True)
 
     created_at = DateTimeField(required=True, default=datetime.datetime.now)

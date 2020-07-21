@@ -40,6 +40,8 @@ class ModelDumper:
         self.model.load()
 
     def init_history(self, initial_scores=None):
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: creating in_training_evaluation_history record.')
         InTrainingEvaluationHistory(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
@@ -49,8 +51,12 @@ class ModelDumper:
         if initial_scores is not None:
             self.append_to_history(initial_scores)
             self.append_to_best_history(initial_scores)
+        print('done!')
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def append_to_best_history(self, new_metrics):
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: append to best history.')
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
@@ -62,8 +68,12 @@ class ModelDumper:
             model_history.best_history[metric].append(MetricHistoryRecord(**value))
 
         model_history.save()
+        print('done!')
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def append_to_history(self, new_metrics):
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: append to history.')
         model_history = InTrainingEvaluationHistory.objects(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
@@ -75,11 +85,21 @@ class ModelDumper:
             model_history.all_history[metric].append(MetricHistoryRecord(**value))
 
         model_history.save()
+        print('done!')
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+
+    def fetch_db_model(self, restore_type, temperature):
+        return Model.objects(
+            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
+            temperature=self.get_temperature_stringified(temperature),
+        ).get()
 
     def dump_samples_with_persample_metrics(self, dumping_object: dict, restore_type, temperature):
         def convert_dmpobj_to_db_sample(dmp_obj, origin):
             return [
                 Sample(
+                    model=model,
                     index=i,
                     origin=origin,
                     tokens=dmp_obj[origin]['tokens'][i],
@@ -90,7 +110,11 @@ class ModelDumper:
                 for i in range(len(dmp_obj[origin]['sentence']))
             ]
 
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+
         assert ModelDumper.persample_metrics_exist_for_each_sample(dumping_object)
+
+        print('DB: creating model record.')
 
         model = Model(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
@@ -99,21 +123,26 @@ class ModelDumper:
         )
 
         model.save()
+        print('done!')
 
+        print('DB: creating { generated, test } samples record.')
         generated_samples = convert_dmpobj_to_db_sample(dumping_object, origin='generated')
         test_samples = convert_dmpobj_to_db_sample(dumping_object, origin='test')
 
         Sample.objects.insert(generated_samples)
         Sample.objects.insert(test_samples)
 
+        print('DB: {} generated samples and {} test samples inserted into database! done!'
+              .format(len(generated_samples), len(test_samples)))
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+
     def update_persample_metrics_for_generated_samples(self, dumping_object: dict, restore_type, temperature):
         from pymongo import UpdateOne
 
-        model = Model.objects(
-            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
-            temperature=self.get_temperature_stringified(temperature),
-        ).get()
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: updating generated samples metrics.')
+
+        model = self.fetch_db_model(restore_type, temperature)
 
         generated_samples = Sample.objects(model=model, origin='generated').order_by('+index')
         new_metrics = [{} for _ in range(len(generated_samples))]
@@ -137,20 +166,30 @@ class ModelDumper:
             for i, nm in enumerate(new_metrics) if len(new_metrics) != 0
         ]
         Sample._get_collection().bulk_write(update_operations, ordered=False)
+        print('done!')
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def load_samples_with_persample_metrics(self, restore_type, temperature):
-        result = ModelSamples.objects(
-            model_name=self.model.get_name(), dataset_name=self.dm_name,
-            run=self.run, restore_type=restore_type,
-            temperature=self.get_temperature_stringified(temperature)).get()
-        return result
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: fetching { generated, test } samples.')
+
+        model = self.fetch_db_model(restore_type, temperature)
+
+        generated_samples = Sample.objects(model=model, origin='generated').order_by('+index')
+        test_samples = Sample.objects(model=model, origin='test').order_by('+index')
+
+        print('{} generated samples and {} test samples fetched! done!'.format(len(generated_samples),
+                                                                               len(test_samples)))
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        return {'model': model, 'generated': generated_samples, 'test': test_samples}
 
     def dump_final_evaluation_results(self, dumping_object: dict, restore_type, temperature):
-        evaluation_result = ModelEvaluationResult(
-            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
-            temperature=self.get_temperature_stringified(temperature),
-        )
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: inserting model_evaluation_result record.')
+
+        model = self.fetch_db_model(restore_type, temperature)
+
+        evaluation_result = ModelEvaluationResult(model=model)
 
         for metric, value in dumping_object.items():
             if isinstance(value, dict):
@@ -159,13 +198,24 @@ class ModelDumper:
                 evaluation_result.metrics[metric] = MetricResult(value=value)
 
         evaluation_result.save()
+        print('done!')
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def load_final_evaluation_results(self, restore_type, temperature):
-        return ModelEvaluationResult.objects(
+        print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        print('DB: fetcing model_evaluation_result record.')
+
+        model = self.fetch_db_model(restore_type, temperature)
+
+        result = ModelEvaluationResult.objects(
+            model=model,
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
-        ).order_by('-created_at').first()
+        ).get()
+        print('done!')
+        print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        return result
 
     @staticmethod
     def get_temperature_stringified(temperature):

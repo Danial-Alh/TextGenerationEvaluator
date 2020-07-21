@@ -42,7 +42,7 @@ class TexyGen(BaseModel):
 
     @data2file_decorator(delete_tempfile=False)
     def init_model(self, train_samples, valid_samples, train_samples_loc, valid_samples_loc):
-        super.init_model(train_samples, valid_samples, train_samples_loc, valid_samples_loc)
+        super().init_model(train_samples, valid_samples, train_samples_loc, valid_samples_loc)
         self.model = self.model_class()
         self.model.init_real_trainng(self.parser)
         self.load()
@@ -114,7 +114,7 @@ class TexyGen(BaseModel):
         return self.model_class.saving_path
 
     def get_name(self):
-        return self.model_class.__name__
+        return self.model_class.__name__.lower()
 
     def load(self):
         super().load()

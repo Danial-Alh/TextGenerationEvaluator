@@ -31,7 +31,7 @@ class RealWorldEvaluator(Evaluator):
                                                         parser=self.parser, parse=False)
             self.fbd = FBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
             self.embd = EMBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
-        elif mode == 'generated':
+        elif mode == 'gen':
             pass
         else:
             raise BaseException('invalid evaluator mode!')
@@ -64,10 +64,8 @@ class RealWorldEvaluator(Evaluator):
         dumping_object['generated']['nllq'] = nllqfromq
         dumping_object['test']['nllq'] = nllqfromp
 
-    def get_test_scores(self, db_model: Model,
-                        test_samples: List[Sample], generated_samples: List[Sample]):
-        # generated_tokens = [r.tokens for r in samples.generated_samples]
-        generated_sentences = [r.sentence for r in generated_samples]
+    def get_test_scores(self, samples):
+        generated_sentences = [r.sentence for r in samples['generated']]
 
         if self.SELFBLEU_N_S == -1 or self.SELFBLEU_N_S > len(generated_sentences):
             subsampled_sentences = generated_sentences
@@ -88,7 +86,7 @@ class RealWorldEvaluator(Evaluator):
         persample_scores = {}
 
         mean_scores = {
-            'nll': np.mean([r.metrics['nllq'].value for r in test_samples]),
+            'nll': np.mean([r.metrics['nllq'].value for r in samples['test']]),
             'fbd': fbd_result,
             'embd': embd_result
         }

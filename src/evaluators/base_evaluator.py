@@ -112,8 +112,8 @@ class Evaluator:
         samples = dumper.load_samples_with_persample_metrics(restore_type, self.temperature)
 
         print('samples: {}, refs: {}, raw tests: {}'
-              .format(len(samples.generated_samples),
-                      len(samples.test_samples),
+              .format(len(samples['generated']),
+                      len(samples['test']),
                       len(self.test_ds)))
 
         persample_scores, scores = self.get_test_scores(samples)

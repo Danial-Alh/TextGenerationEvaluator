@@ -16,7 +16,7 @@ ROOT_PATH = os.path.abspath(os.path.dirname(os.path.abspath(
 
 DATA_PATH = ROOT_PATH + 'data/'
 BERT_PATH = __bert_path
-MODEL_PATH = DATA_PATH + 'temp_models/'
+MODEL_PATH = DATA_PATH + 'models/'
 EXPORT_PATH = DATA_PATH + 'exports/'
 TABLE_EXPORT_PATH = DATA_PATH + 'exports/tables/'
 FIG_EXPORT_PATH = DATA_PATH + 'exports/figs/'
