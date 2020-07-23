@@ -22,8 +22,10 @@ class RVAE(nn.Module):
 
         self.encoder = Encoder(self.params)
 
-        self.context_to_mu = nn.Linear(self.params.encoder_rnn_size * 2, self.params.latent_variable_size)
-        self.context_to_logvar = nn.Linear(self.params.encoder_rnn_size * 2, self.params.latent_variable_size)
+        self.context_to_mu = nn.Linear(self.params.encoder_rnn_size * 2,
+                                       self.params.latent_variable_size)
+        self.context_to_logvar = nn.Linear(
+            self.params.encoder_rnn_size * 2, self.params.latent_variable_size)
 
         self.decoder = Decoder(self.params)
 
@@ -56,7 +58,6 @@ class RVAE(nn.Module):
             or (z is not None and decoder_word_input is not None), \
             "Invalid input. If z is None then encoder and decoder inputs should be passed as arguments"
         encoder_character_input, decoder_character_input = None, None
-        
 
         if z is None:
             ''' Get context from encoder and sample z ~ N(mu, std)
@@ -98,18 +99,21 @@ class RVAE(nn.Module):
             input = [var.long() for var in input]
             input = [var.cuda() if use_cuda else var for var in input]
 
-            [encoder_word_input, encoder_character_input, decoder_word_input, decoder_character_input, target] = input
+            [encoder_word_input, encoder_character_input,
+                decoder_word_input, decoder_character_input, target] = input
 
             logits, _, kld = self(dropout,
                                   encoder_word_input, encoder_character_input,
                                   decoder_word_input, decoder_character_input,
                                   z=None)
 
-            logits = logits.view(-1, self.params.word_vocab_size)
-            target = target.view(-1)
-            cross_entropy = F.cross_entropy(logits, target)
+            logits = logits.transpose(1, 2)
+            target = target
+            cross_entropy = F.cross_entropy(logits, target,
+                                            ignore_index=batch_loader.word_to_idx[batch_loader.pad_token],
+                                            reduction='none').sum(dim=-1).mean()
 
-            loss = 79 * cross_entropy + kld_coef(i) * kld
+            loss = cross_entropy + kld_coef(i) * kld * 00
 
             optimizer.zero_grad()
             loss.backward()
@@ -126,7 +130,8 @@ class RVAE(nn.Module):
             input = [var.long() for var in input]
             input = [var.cuda() if use_cuda else var for var in input]
 
-            [encoder_word_input, encoder_character_input, decoder_word_input, decoder_character_input, target] = input
+            [encoder_word_input, encoder_character_input,
+                decoder_word_input, decoder_character_input, target] = input
 
             logits, _, kld = self(0.,
                                   encoder_word_input, encoder_character_input,
@@ -136,7 +141,8 @@ class RVAE(nn.Module):
             logits = logits.view(-1, self.params.word_vocab_size)
             target = target.view(-1)
 
-            cross_entropy = F.cross_entropy(logits, target)
+            cross_entropy = F.cross_entropy(
+                logits, target, ignore_index=batch_loader.word_to_idx[batch_loader.pad_token])
 
             return cross_entropy, kld
 

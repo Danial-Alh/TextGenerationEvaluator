@@ -1,5 +1,7 @@
 from functools import reduce
 import os
+import pymongo
+import mongoengine
 
 import numpy as np
 
@@ -14,7 +16,7 @@ from utils.path_configs import COMPUTER_NAME, EXPORT_PATH, MODEL_PATH
 # from .base_evaluator import BaseModel
 
 
-class ModelDumper:
+class ModelDumpManager:
     def __init__(self, model, run=0, dm_name=''):
         self.run = run
         self.dm_name = dm_name
@@ -35,18 +37,33 @@ class ModelDumper:
     def restore_model(self, key):
         self.model.delete_saved_model()
         unzip_file(key, self.saving_path, self.model.get_saving_path())
+        self.model.load()
         print('Run %d - "%s" based "%s"; saved model restored' %
               (self.run, key, self.model.get_name()))
-        self.model.load()
 
     def init_history(self, initial_scores=None):
         print('*' * 10 + ' DB SECTION ' + '*' * 10)
         print('DB: creating in_training_evaluation_history record.')
-        InTrainingEvaluationHistory(
+        record = InTrainingEvaluationHistory(
             machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run,
             best_history={}, all_history={}
-        ).save()
+        )
+
+        try:
+            record.save()
+        except mongoengine.errors.NotUniqueError as e:
+            print(e)
+            if input('InTrainingEvaluationHistory record found. delete it? (y/N)') == 'y':
+                InTrainingEvaluationHistory.objects(
+                    model_name=self.model.get_name(),
+                    dataset_name=self.dm_name, run=self.run,
+                ).get().delete()
+                print("DB: old record deleted!")
+                record.save()
+            else:
+                print("duplicate keys not allowed!")
+                raise e
 
         if initial_scores is not None:
             self.append_to_history(initial_scores)
@@ -112,7 +129,7 @@ class ModelDumper:
 
         print('*' * 10 + ' DB SECTION ' + '*' * 10)
 
-        assert ModelDumper.persample_metrics_exist_for_each_sample(dumping_object)
+        assert ModelDumpManager.persample_metrics_exist_for_each_sample(dumping_object)
 
         print('DB: creating model record.')
 
@@ -122,7 +139,22 @@ class ModelDumper:
             temperature=self.get_temperature_stringified(temperature),
         )
 
-        model.save()
+        try:
+            model.save()
+        except mongoengine.errors.NotUniqueError as e:
+            print(e)
+            if input('Model record found. delete it? (y/N)') == 'y':
+                Model.objects(
+                    model_name=self.model.get_name(),
+                    dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
+                    temperature=self.get_temperature_stringified(temperature),
+                ).get().delete()
+                print("DB: old record deleted!")
+                model.save()
+            else:
+                print("duplicate keys not allowed!")
+                raise e
+
         print('done!')
 
         print('DB: creating { generated, test } samples record.')
@@ -197,7 +229,18 @@ class ModelDumper:
             else:
                 evaluation_result.metrics[metric] = MetricResult(value=value)
 
-        evaluation_result.save()
+        try:
+            evaluation_result.save()
+        except mongoengine.errors.NotUniqueError as e:
+            print(e)
+            if input('ModelEvaluationResult record found. delete it? (y/N)') == 'y':
+                ModelEvaluationResult.objects(model=model).get().delete()
+                print("DB: old record deleted!")
+                evaluation_result.save()
+            else:
+                print("duplicate keys not allowed!")
+                raise e
+
         print('done!')
         print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
@@ -216,6 +259,8 @@ class ModelDumper:
         print('done!')
         print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
         return result
+
+    
 
     @staticmethod
     def get_temperature_stringified(temperature):

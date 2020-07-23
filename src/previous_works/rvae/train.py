@@ -6,7 +6,7 @@ from tqdm.auto import tqdm, trange
 
 import numpy as np
 import torch as t
-import torch.functional as F
+import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.optim import Adam
 
@@ -27,16 +27,14 @@ CURRENT_ROOT_PATH = os.path.abspath(
 SAVING_PATH = CURRENT_ROOT_PATH + '__saved/'
 
 
-def create_batchloader(train_samples_loc, valid_samples_loc, parser):
+def create_batchloader(train_samples_loc, valid_samples_loc, wrapper):
     batch_loader = BatchLoader(
         CURRENT_ROOT_PATH,
         data_files=[
             train_samples_loc,
             valid_samples_loc
         ],
-        pad_token=str(parser.vocab.stoi[parser.pad_token]),
-        go_token=str(parser.vocab.stoi[parser.init_token]),
-        end_token=str(parser.vocab.stoi[parser.eos_token]),
+        wrapper=wrapper
     )
     return batch_loader
 
@@ -61,11 +59,11 @@ def create_model(parameters):
 
 
 def load(rvae: t.nn.Module):
-    rvae.load_state_dict(t.load(CURRENT_ROOT_PATH + 'saved/trained_RVAE'))
+    rvae.load_state_dict(t.load(CURRENT_ROOT_PATH + '__saved/trained_RVAE'))
 
 
 def train(rvae, batch_loader, parameters, wrapper):
-    # if not os.path.exists('saved/word_embeddings.npy'):
+    # if not os.path.exists('__saved/word_embeddings.npy'):
     #     raise FileNotFoundError("word embeddings file was't found")
 
     # parser = argparse.ArgumentParser(description='RVAE')
@@ -92,8 +90,8 @@ def train(rvae, batch_loader, parameters, wrapper):
         num_iterations=120000,
         batch_size=32,
         use_cuda=t.cuda.is_available(),
-        learning_rate=5e-5,
-        dropout=0.3,
+        learning_rate=1e-3,
+        dropout=0.0,
         use_trained=False,
         ce_result='',
         kld_result=''
@@ -111,11 +109,10 @@ def train(rvae, batch_loader, parameters, wrapper):
 
     ce_result = []
     kld_result = []
-    epoch = 0
     N_EPOCHS = 80
     num_batches = batch_loader.num_lines[0] // args.batch_size + 1
 
-    for iteration in trange(N_EPOCHS):
+    for epoch in trange(N_EPOCHS):
         for _iteration in trange(num_batches):
             iteration = epoch * num_batches + _iteration
 
@@ -135,6 +132,8 @@ def train(rvae, batch_loader, parameters, wrapper):
                 print(coef)
                 print('------------------------------')
 
+        t.save(rvae.state_dict(), CURRENT_ROOT_PATH + '__saved/trained_RVAE')
+
         cross_entropy, kld = validate(args.batch_size, args.use_cuda)
 
         cross_entropy = cross_entropy.data.cpu().numpy()
@@ -150,9 +149,7 @@ def train(rvae, batch_loader, parameters, wrapper):
 
         ce_result += [cross_entropy]
         kld_result += [kld]
-        samples = sample(rvae, batch_loader, 1,  wrapper.parser.max_length)
-        samples = [list(map(int, l)) for l in samples]
-        samples = t.tensor(samples)
+        samples = sample(rvae, batch_loader, 1,  wrapper.parser.max_length, {'value': None})
         samples = wrapper.parser.reverse(samples)
         print('\n')
         print('------------SAMPLE------------')
@@ -161,13 +158,13 @@ def train(rvae, batch_loader, parameters, wrapper):
         print('------------------------------')
         wrapper.update_metrics(epoch=epoch+1)
 
-    t.save(rvae.state_dict(), CURRENT_ROOT_PATH + 'saved/trained_RVAE')
-
     # np.save(CURRENT_ROOT_PATH + 'ce_result_{}.npy'.format(args.ce_result), np.array(ce_result))
     # np.save(CURRENT_ROOT_PATH + 'kld_result_npy_{}'.format(args.kld_result), np.array(kld_result))
 
 
-def sample(rvae, batch_loader, n_samples, seq_len):
+def sample(rvae, batch_loader, n_samples, seq_len, temperatue):
+    if temperatue['value'] is None:
+        temperatue = 1.0
     with t.no_grad():
         use_cuda = t.cuda.is_available()
         seed = np.random.normal(size=[n_samples, rvae.params.latent_variable_size])
@@ -192,8 +189,10 @@ def sample(rvae, batch_loader, n_samples, seq_len):
             logits, initial_state, _ = rvae(0., None, None,
                                             decoder_word_input, decoder_character_input,
                                             seed, initial_state)
-            logits = logits[:, -1].view(-1, rvae.params.word_vocab_size)
-            decoder_word_input = t.multinomial(t.sigmoid(logits).cpu(), 1,)
+            logits = logits[:, -1]
+            logits = logits / temperatue['value']
+            probs = F.softmax(logits, dim=-1).cpu()
+            decoder_word_input = t.multinomial(probs, 1,)
 
             result_ids.append(decoder_word_input[:, 0])
 
@@ -201,7 +200,5 @@ def sample(rvae, batch_loader, n_samples, seq_len):
                 decoder_word_input, decoder_character_input = decoder_word_input.cuda(), decoder_character_input.cuda()
 
     result_ids = t.stack(result_ids, dim=1)
-    result_ids = result_ids.tolist()
-    result = [[batch_loader.idx_to_word[xx] for xx in x] for x in result_ids]
-
-    return result
+    result_ids = result_ids
+    return result_ids

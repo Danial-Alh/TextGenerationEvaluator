@@ -12,7 +12,7 @@ class Embedding(nn.Module):
 
         self.params = params
 
-        # word_embed = np.load(path + 'saved/word_embeddings.npy')
+        # word_embed = np.load(path + '__saved/word_embeddings.npy')
 
         self.word_embed = nn.Embedding(self.params.word_vocab_size, self.params.word_embed_size)
         # self.char_embed = nn.Embedding(self.params.char_vocab_size, self.params.char_embed_size)

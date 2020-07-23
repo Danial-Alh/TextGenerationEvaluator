@@ -19,7 +19,7 @@ class VAE(BaseModel):
     def init_model(self, train_samples, valid_samples, train_samples_loc, valid_samples_loc):
         super().init_model(train_samples, valid_samples, train_samples_loc, valid_samples_loc)
         from previous_works.rvae.train import create_model as crm, create_batchloader as crb, create_parameters as crp
-        self.batchloader = crb(train_samples_loc, valid_samples_loc, self.parser)
+        self.batchloader = crb(train_samples_loc, valid_samples_loc, self)
         self.parameters = crp(self.batchloader)
         self.model = crm(self.parameters)
 
@@ -31,7 +31,7 @@ class VAE(BaseModel):
     @empty_sentence_remover_decorator
     def generate_samples(self, n_samples, temperature):
         from previous_works.rvae.train import sample as smp
-        samples = smp(self.model, self.batchloader, n_samples, self.parser.max_length)
+        samples = smp(self.model, self.batchloader, n_samples, self.parser.max_length, temperature)
         return samples
 
     @data2file_decorator(delete_tempfile=True)

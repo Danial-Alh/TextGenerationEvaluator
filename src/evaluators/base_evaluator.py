@@ -5,7 +5,7 @@ from utils.path_configs import BERT_PATH as B_P
 
 from db_management.models import Sample, Model
 
-from .model_dumper import ModelDumper
+from utils.model_dumper import ModelDumpManager
 
 
 class Evaluator:
@@ -72,16 +72,15 @@ class Evaluator:
 
         if model_name != 'real':
             model = create_model(model_name, self.parser)
-            model.delete_saved_model()
+            dumper = ModelDumpManager(model, run, self.dm_name)
             model.init_model((self.train_ds.text, self.valid_ds.text))
-            dumper = ModelDumper(model, run, self.dm_name)
             dumper.restore_model(restore_type)
 
             generated_tokens = model.generate_samples(len(self.test_ds), self.temperature)
             test_tokens = list(self.test_ds.text)
         else:
             model = create_model('real', None)
-            dumper = ModelDumper(model, run, self.dm_name)
+            dumper = ModelDumpManager(model, run, self.dm_name)
 
             generated_tokens = list(self.train_ds.text)
             test_tokens = list(self.test_ds.text)
@@ -108,7 +107,7 @@ class Evaluator:
         print('run: {}, restore_type: {}, model_name: {}'.format(run, restore_type, model_name))
 
         m = create_model(model_name, None)
-        dumper = ModelDumper(m, run, self.dm_name)
+        dumper = ModelDumpManager(m, run, self.dm_name)
         samples = dumper.load_samples_with_persample_metrics(restore_type, self.temperature)
 
         print('samples: {}, refs: {}, raw tests: {}'

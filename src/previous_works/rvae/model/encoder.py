@@ -12,7 +12,7 @@ class Encoder(nn.Module):
 
         self.params = params
 
-        self.hw1 = Highway(self.params.word_embed_size, 2, F.relu)
+        # self.hw1 = Highway(self.params.word_embed_size, 2, F.relu)
 
         self.rnn = nn.LSTM(input_size=self.params.word_embed_size,
                            hidden_size=self.params.encoder_rnn_size,
@@ -28,9 +28,9 @@ class Encoder(nn.Module):
 
         [batch_size, seq_len, embed_size] = input.size()
 
-        input = input.view(-1, embed_size)
-        input = self.hw1(input)
-        input = input.view(batch_size, seq_len, embed_size)
+        # input = input.view(-1, embed_size)
+        # input = self.hw1(input)
+        # input = input.view(batch_size, seq_len, embed_size)
 
         # assert parameters_allocation_check(self), \
         #     'Invalid CUDA options. Parameters should be allocated in the same memory'

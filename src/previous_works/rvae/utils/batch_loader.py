@@ -9,8 +9,7 @@ from .functional import *
 
 
 class BatchLoader:
-    def __init__(self, path='../', data_files=None,
-                 pad_token='_', go_token='>', end_token='|'):
+    def __init__(self, path='../', data_files=None, wrapper=None):
         '''
             :properties
 
@@ -73,6 +72,7 @@ class BatchLoader:
                         in case of performance
         '''
 
+        assert wrapper is not None
         if data_files is None:
             data_files = [path + '__data/train.txt',
                           path + '__data/test.txt']
@@ -87,9 +87,9 @@ class BatchLoader:
                               path + '__saved/valid_character_tensor.npy']]
 
         self.blind_symbol = ''
-        self.pad_token = pad_token
-        self.go_token = go_token
-        self.end_token = end_token
+        self.pad_token = wrapper.parser.pad_token
+        self.go_token = wrapper.parser.init_token
+        self.end_token = wrapper.parser.eos_token
 
         idx_exists = fold(f_and,
                           [os.path.exists(file) for file in self.idx_files],
@@ -100,16 +100,11 @@ class BatchLoader:
                                for file in target],
                               True)
 
-        if idx_exists and tensors_exists:
-            self.load_preprocessed(self.data_files,
-                                   self.idx_files,
-                                   self.tensor_files)
-            print('preprocessed data was found and loaded')
-        else:
-            self.preprocess(self.data_files,
-                            self.idx_files,
-                            self.tensor_files)
-            print('data have preprocessed')
+        self.preprocess(self.data_files,
+                        self.idx_files,
+                        self.tensor_files,
+                        wrapper)
+        print('data have preprocessed')
 
         self.word_embedding_index = 0
 
@@ -174,7 +169,7 @@ class BatchLoader:
 
         return words_vocab_size, idx_to_word, word_to_idx
 
-    def preprocess(self, data_files, idx_files, tensor_files):
+    def preprocess(self, data_files, idx_files, tensor_file, wrapper):
 
         data = [open(file, "r").read() for file in data_files]
         merged_data = data[0] + '\n' + data[1]
@@ -182,26 +177,25 @@ class BatchLoader:
         self.chars_vocab_size, self.idx_to_char, self.char_to_idx = self.build_character_vocab(
             merged_data)
 
-        with open(idx_files[1], 'wb') as f:
-            cPickle.dump(self.idx_to_char, f)
-
         data_words = [[line.split() for line in target.split('\n')] for target in data]
         merged_data_words = merged_data.split()
 
-        self.words_vocab_size, self.idx_to_word, self.word_to_idx = self.build_word_vocab(
-            merged_data_words)
+        self.words_vocab_size, self.idx_to_word, self.word_to_idx = \
+            len(wrapper.parser.vocab.itos),\
+            wrapper.parser.vocab.itos,\
+            wrapper.parser.vocab.stoi
+        # self.build_word_vocab(merged_data_words)
         self.max_word_len = np.amax([len(word) for word in self.idx_to_word])
         self.max_seq_len = np.amax([len(line) for target in data_words for line in target])
         self.num_lines = [len(target) for target in data_words]
 
-        with open(idx_files[0], 'wb') as f:
-            cPickle.dump(self.idx_to_word, f)
-
+        # self.word_tensor = np.array(
+        #     [[list(map(self.word_to_idx.get, line)) for line in target] for target in data_words])
         self.word_tensor = np.array(
-            [[list(map(self.word_to_idx.get, line)) for line in target] for target in data_words])
+            [[list(map(int, line)) for line in target] for target in data_words])
         print(self.word_tensor.shape)
         # for i, path in enumerate(tensor_files[0]):
-        #     np.save(path, self.word_tensor[i])
+        # np.save(path, self.word_tensor[i])
 
         self.character_tensor = np.array(
             [[list(map(self.encode_characters, line)) for line in target] for target in data_words])
@@ -241,17 +235,16 @@ class BatchLoader:
         encoder_word_input = [self.word_tensor[target][index] for index in indexes]
         encoder_character_input = [self.character_tensor[target][index] for index in indexes]
         input_seq_len = [len(line) for line in encoder_word_input]
-        max_input_seq_len = np.amax(input_seq_len)
+        max_input_seq_len = np.amax(input_seq_len) - 1
 
         encoded_words = [[idx for idx in line] for line in encoder_word_input]
         # decoder_word_input = [[self.word_to_idx[self.go_token]] +
         #                       line for line in encoder_word_input]
-        # decoder_character_input = [[self.encode_characters(
-        #     self.go_token)] + line for line in encoder_character_input]
+        decoder_character_input = [[self.encode_characters(
+            self.go_token)] + line for line in encoder_character_input]
         # decoder_output = [line + [self.word_to_idx[self.end_token]] for line in encoded_words]
-        decoder_word_input = encoded_words
-        decoder_character_input = encoder_character_input
-        decoder_output = encoded_words
+        decoder_word_input = [line[:-1] for line in encoded_words]
+        decoder_output = [line[1:] for line in encoded_words]
 
         # sorry
         for i, line in enumerate(decoder_word_input):
@@ -331,9 +324,15 @@ class BatchLoader:
         return self.idx_to_word[np.argmax(x)]
 
     def encode_characters(self, characters):
-        word_len = len(characters)
-        to_add = self.max_word_len - word_len
-        characters_idx = [self.char_to_idx[i] for i in characters] + to_add * [self.char_to_idx['']]
+        if characters in (self.pad_token, self.end_token, self.go_token):
+            word_len = 1
+            to_add = self.max_word_len - word_len
+            characters_idx = [self.char_to_idx[characters]] + to_add * [self.char_to_idx['']]
+        else:
+            word_len = len(characters)
+            to_add = self.max_word_len - word_len
+            characters_idx = [self.char_to_idx[i]
+                              for i in characters] + to_add * [self.char_to_idx['']]
         return characters_idx
 
     def decode_characters(self, characters_idx):

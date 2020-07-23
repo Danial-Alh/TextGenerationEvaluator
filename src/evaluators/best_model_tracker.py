@@ -1,7 +1,7 @@
 from previous_works.model_wrappers import create_model
 
 # from .base_evaluator import Evaluator
-from .model_dumper import ModelDumper
+from utils.model_dumper import ModelDumpManager
 
 
 class BestModelTracker:
@@ -13,7 +13,7 @@ class BestModelTracker:
         self.model.set_tracker(self)
         self.model.delete_saved_model()
 
-        self.dumper = ModelDumper(self.model, self.run, evaluator.dm_name)
+        self.dumper = ModelDumpManager(self.model, self.run, evaluator.dm_name)
         self.best_history = None
 
     def update_metrics(self, epoch=0, last_iter=False):

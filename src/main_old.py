@@ -2,7 +2,7 @@ from evaluators.base_evaluator import k_fold
 from evaluators.base_evaluator import update_config
 import argparse
 
-from evaluators import BestModelTracker, ModelDumper
+from evaluators import BestModelTracker, ModelDumpManager
 from previous_works import all_models, create_model
 
 parser = argparse.ArgumentParser()
@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser()
 def convert_legacies():
     ev_name = args.mode
     m = create_model('dgsan', None)
-    dmp = ModelDumper(m, args.run, dataset_prefix_name)
+    dmp = ModelDumpManager(m, args.run, dataset_prefix_name)
     ts_lines = [r['text'] for r in dmp.load_samples_with_additional_fields('bleu3', 'test')]
     for m_name in all_models:
         if m_name == 'dgsan':
@@ -23,7 +23,7 @@ def convert_legacies():
             for run in args.run:
                 print('********************* Legacy convert run{} *********************'.format(run))
                 m = create_model(m_name, None)
-                dmp = ModelDumper(m, args.run, dataset_prefix_name)
+                dmp = ModelDumpManager(m, args.run, dataset_prefix_name)
                 sample_lines = dmp.load_generated_samples(restore)
                 dmp.dump_samples_with_additional_fields(sample_lines, {'nllq': [1.0 for _ in sample_lines],
                                                                        'nllp': [1.0 for _ in sample_lines]},
