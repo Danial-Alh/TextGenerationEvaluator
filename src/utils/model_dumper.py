@@ -1,16 +1,16 @@
-from functools import reduce
 import os
-import pymongo
-import mongoengine
+from functools import reduce
 
+import mongoengine
 import numpy as np
+import pandas as pd
+import pymongo
 
 from db_management.models import (InTrainingEvaluationHistory,
-                                  MetricHistoryRecord, MetricResult,
-                                  ModelEvaluationResult, Model,
-                                  Sample)
-from utils.file_handler import (create_folder_if_not_exists,
-                                unzip_file, zip_folder)
+                                  MetricHistoryRecord, MetricResult, Model,
+                                  ModelEvaluationResult, Sample)
+from utils.file_handler import (create_folder_if_not_exists, unzip_file,
+                                zip_folder)
 from utils.path_configs import COMPUTER_NAME, EXPORT_PATH, MODEL_PATH
 
 # from .base_evaluator import BaseModel
@@ -107,7 +107,7 @@ class ModelDumpManager:
 
     def fetch_db_model(self, restore_type, temperature):
         return Model.objects(
-            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
+            model_name=self.model.get_name(),
             dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
             temperature=self.get_temperature_stringified(temperature),
         ).get()
@@ -210,6 +210,9 @@ class ModelDumpManager:
         generated_samples = Sample.objects(model=model, origin='generated').order_by('+index')
         test_samples = Sample.objects(model=model, origin='test').order_by('+index')
 
+        generated_samples = list(generated_samples)
+        test_samples = list(test_samples)
+
         print('{} generated samples and {} test samples fetched! done!'.format(len(generated_samples),
                                                                                len(test_samples)))
         print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
@@ -250,17 +253,43 @@ class ModelDumpManager:
 
         model = self.fetch_db_model(restore_type, temperature)
 
-        result = ModelEvaluationResult.objects(
-            model=model,
-            machine_name=COMPUTER_NAME, model_name=self.model.get_name(),
-            dataset_name=self.dm_name, run=self.run, restore_type=restore_type,
-            temperature=self.get_temperature_stringified(temperature),
-        ).get()
+        result = ModelEvaluationResult.objects(model=model).get()
+
         print('done!')
         print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
-        return result
+        return {'model': model, 'result': result}
 
-    
+    def add_db_model_evaluation_result_to_dataframe(self, restore_type, temperature, initial_dataframe=pd.DataFrame()):
+        final_result = self.load_final_evaluation_results(restore_type, temperature)
+
+        model = final_result['model']
+        model_result = final_result['result']
+
+        df_model_record = {field_name:getattr(model, field_name)
+                           for field_name in Model._fields.keys()}
+        df_result_record = {metric: value['value']
+                            for metric, value in model_result.metrics.items()}
+
+        df_record = {**df_model_record, **df_result_record}
+        return initial_dataframe.append(df_record, ignore_index=True)
+
+    def add_db_samples_to_dataframe(self, restore_type, temperature, initial_dataframe=pd.DataFrame()):
+        final_result = self.load_samples_with_persample_metrics(restore_type, temperature)
+
+        model = final_result['model']
+        samples = final_result['generated'] + final_result['test']
+
+        df_model_record = {field_name:getattr(model, field_name)
+                           for field_name in Model._fields.keys()}
+        df_records = [
+            {
+                **df_model_record,
+                **{metric: value['value'] for metric, value in sample.metrics.items()}
+            }
+            for sample in samples
+        ]
+
+        return initial_dataframe.append(df_records, ignore_index=True)
 
     @staticmethod
     def get_temperature_stringified(temperature):
@@ -287,3 +316,16 @@ class ModelDumpManager:
                       )
                 return False
         return True
+
+
+if __name__ == "__main__":
+    from data_management.data_manager import load_real_dataset
+    from previous_works.model_wrappers import create_model
+    DATASET_NAME = "coco"
+    _, _, _, TEXT = load_real_dataset(DATASET_NAME)
+    m = create_model('vae', TEXT)
+    dumper = ModelDumpManager(m, run=0, dm_name=DATASET_NAME)
+    df_model = dumper.add_db_model_evaluation_result_to_dataframe('last_iter', {'value': None})
+    print(df_model)
+    # df_samples = dumper.add_db_samples_to_dataframe('last_iter', {'value': None})
+    # print(df_samples)
