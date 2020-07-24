@@ -6,3 +6,4 @@ data
 __pycache__
 .env
 ehsan_db.py
+db_management.*

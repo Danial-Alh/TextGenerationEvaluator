@@ -91,7 +91,7 @@ if args.action == 'train':
         if args.models is None:
             raise BaseException('specify the model to be trained!')
         for model_name in args.models:
-            tracker = BestModelTracker(model_name, ev)
+            tracker = BestModelTracker(model_name, args.temperatures[0], ev)
             tracker.start()
             tracker.model.reset_model()
 elif args.action == 'gen':

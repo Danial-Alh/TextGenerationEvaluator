@@ -1,11 +1,10 @@
-from typing import List
+
+from db_management.model_db_manager import ModelDBManager
+from evaluators.best_model_tracker import ModelDumpManager
 from previous_works.model_wrappers import create_model
 from previous_works.model_wrappers.base_model import BaseModel
 from utils.path_configs import BERT_PATH as B_P
-
-from db_management.models import Sample, Model
-
-from utils.model_dumper import ModelDumpManager
+from utils.path_configs import COMPUTER_NAME
 
 
 class Evaluator:
@@ -39,14 +38,13 @@ class Evaluator:
         else:
             raise BaseException('dm_name {} is invalid!'.format(dm_name))
 
-    def __init__(self, train_ds, valid_ds, test_ds, parser, mode, temperature, dm_name=''):
+    def __init__(self, train_ds, valid_ds, test_ds, parser, mode, dm_name=''):
         # in train and gen mode, data is coded but in eval mode data is raw
         self.update_config(dm_name)
         self.parser = parser
         self.train_ds = train_ds
         self.valid_ds = valid_ds
         self.test_ds = test_ds
-        self.temperature = temperature
         self.dm_name = dm_name
         self.during_training_n_sampling = 5000
         self.init_metrics(mode)
@@ -57,14 +55,13 @@ class Evaluator:
     def get_initial_scores_during_training(self):
         pass
 
-    def get_during_training_scores(self, model: BaseModel):
+    def get_during_training_scores(self, model: BaseModel, temperature):
         pass
 
-    def get_test_scores(self, db_model: Model,
-                        test_samples: List[Sample], generated_samples: List[Sample]):
+    def get_test_scores(self, samples):
         pass
 
-    def generate_samples(self, model_name, run, restore_type):
+    def generate_samples(self, model_name, run, restore_type, temperature):
         print(restore_type)
         # for model_name in model_names:
         print('run: {}, restore_type: {}, model_name: {}'.format(
@@ -73,10 +70,13 @@ class Evaluator:
         if model_name != 'real':
             model = create_model(model_name, self.parser)
             dumper = ModelDumpManager(model, run, self.dm_name)
+            db_manager = ModelDBManager(COMPUTER_NAME, self.dm_name, model.get_name(),
+                                        run, restore_type, temperature)
+
             model.init_model((self.train_ds.text, self.valid_ds.text))
             dumper.restore_model(restore_type)
 
-            generated_tokens = model.generate_samples(len(self.test_ds), self.temperature)
+            generated_tokens = model.generate_samples(len(self.test_ds), temperature)
             test_tokens = list(self.test_ds.text)
         else:
             model = create_model('real', None)
@@ -96,19 +96,19 @@ class Evaluator:
 
         self.add_persample_metrics(dumping_object, model)
 
-        dumper.dump_samples_with_persample_metrics(
-            dumping_object, restore_type, self.temperature)
+        db_manager.dump_samples_with_persample_metrics(dumping_object)
         model.reset_model()
 
-    def add_persample_metrics(self, dumping_object, model):
+    def add_persample_metrics(self, dumping_object, model, temperature):
         pass
 
-    def final_evaluate(self, model_name, run, restore_type):
+    def final_evaluate(self, model_name, run, restore_type, temperature):
         print('run: {}, restore_type: {}, model_name: {}'.format(run, restore_type, model_name))
 
         m = create_model(model_name, None)
-        dumper = ModelDumpManager(m, run, self.dm_name)
-        samples = dumper.load_samples_with_persample_metrics(restore_type, self.temperature)
+        db_manager = ModelDBManager(COMPUTER_NAME, self.dm_name, m.get_name(),
+                                    run, restore_type, temperature)
+        samples = db_manager.load_samples_with_persample_metrics()
 
         print('samples: {}, refs: {}, raw tests: {}'
               .format(len(samples['generated']),
@@ -116,9 +116,8 @@ class Evaluator:
                       len(self.test_ds)))
 
         persample_scores, scores = self.get_test_scores(samples)
-        dumper.dump_final_evaluation_results(scores, restore_type, self.temperature)
-        dumper.update_persample_metrics_for_generated_samples(
-            persample_scores, restore_type, self.temperature)
+        db_manager.dump_final_evaluation_results(scores)
+        db_manager.update_persample_metrics_for_generated_samples(persample_scores)
 
 
 # ######## COCO

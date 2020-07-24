@@ -6,8 +6,6 @@ from mongoengine.fields import (EmbeddedDocumentListField, EmbeddedDocumentField
                                 FloatField, DateTimeField, IntField, StringField,
                                 ReferenceField, ListField, MapField)
 
-# import db_management.setup
-
 
 class MetricHistoryRecord(EmbeddedDocument):
     epoch = IntField(required=True)
@@ -17,11 +15,17 @@ class MetricHistoryRecord(EmbeddedDocument):
     updated_at = DateTimeField(required=True, default=datetime.datetime.now)
 
 
-class InTrainingEvaluationHistory(Document):
+class MetricResult(EmbeddedDocument):
+    value = FloatField(required=True)
+    std = FloatField()
+
+
+class TrainedModel(Document):
     machine_name = StringField(required=True)
     model_name = StringField(required=True)
     dataset_name = StringField(required=True)
     run = IntField(required=True)
+    train_temperature = StringField(required=True)
 
     all_history = MapField(EmbeddedDocumentListField(MetricHistoryRecord))
     best_history = MapField(EmbeddedDocumentListField(MetricHistoryRecord))
@@ -36,6 +40,7 @@ class InTrainingEvaluationHistory(Document):
                     'model_name',
                     'dataset_name',
                     '+run',
+                    'train_temperature'
                 ],
                 'unique': True,
             },
@@ -43,6 +48,7 @@ class InTrainingEvaluationHistory(Document):
             '#model_name',
             '#dataset_name',
             '+run',
+            '#train_temperature',
             '-created_at',
             '-updated_at',
         ],
@@ -51,56 +57,51 @@ class InTrainingEvaluationHistory(Document):
     def clean(self):
         self.model_name = self.model_name.lower()
         self.dataset_name = self.dataset_name.lower()
+        self.train_temperature = self.train_temperature.lower()
+        self.updated_at = datetime.datetime.now()
+        super().clean()
 
 
-class Model(Document):
-    machine_name = StringField(required=True)
-    model_name = StringField(required=True)
-    dataset_name = StringField(required=True)
-    run = IntField(required=True)
+class EvaluatedModel(Document):
+    trained_model = ReferenceField(TrainedModel, required=True,
+                                   reverse_delete_rule=mongoengine.CASCADE)
+
     restore_type = StringField(required=True)
-    temperature = StringField(required=True)
+    test_temperature = StringField(required=True)
+
+    metrics = MapField(EmbeddedDocumentField(MetricResult), required=True)
 
     created_at = DateTimeField(required=True, default=datetime.datetime.now)
     updated_at = DateTimeField(required=True, default=datetime.datetime.now)
 
     meta = {
         'indexes': [
-            '#machine_name',
-            '#model_name',
-            '#dataset_name',
-            '#restore_type',
-            '+run',
-            '+temperature',
-            '-created_at',
-            '-updated_at',
             {
                 'fields': [
-                    'model_name',
-                    'dataset_name',
+                    'trained_model',
                     'restore_type',
-                    '+run',
-                    '+temperature',
+                    '+test_temperature',
                 ],
                 'unique': True
-            }
+            },
+            'trained_model',
+            '#restore_type',
+            '+test_temperature',
+            '-created_at',
+            '-updated_at',
         ],
     }
 
     def clean(self):
-        self.model_name = self.model_name.lower()
-        self.dataset_name = self.dataset_name.lower()
         self.restore_type = self.restore_type.lower()
-        self.temperature = self.temperature.lower()
-
-
-class MetricResult(EmbeddedDocument):
-    value = FloatField(required=True)
-    std = FloatField()
+        self.test_temperature = self.test_temperature.lower()
+        self.updated_at = datetime.datetime.now()
+        super().clean()
 
 
 class Sample(Document):
-    model = ReferenceField(Model, required=True, reverse_delete_rule=mongoengine.CASCADE)
+    evaluated_model = ReferenceField(EvaluatedModel, required=True,
+                                     reverse_delete_rule=mongoengine.CASCADE)
 
     index = IntField(required=True)
     origin = StringField()
@@ -111,17 +112,17 @@ class Sample(Document):
 
     meta = {
         'indexes': [
-            'model',
-            '+index',
-            '#origin',
             {
                 'fields': [
-                    'model',
+                    'evaluated_model',
                     '+index',
                     'origin'
                 ],
                 'unique': True
-            }
+            },
+            'evaluated_model',
+            '+index',
+            '#origin',
         ]
     }
 
@@ -130,25 +131,9 @@ class Sample(Document):
         assert self.origin in ('test', 'generated')
 
 
-class ModelEvaluationResult(Document):
-    model = ReferenceField(Model, required=True,
-                           reverse_delete_rule=mongoengine.CASCADE, unique=True)
-    metrics = MapField(EmbeddedDocumentField(MetricResult), required=True)
-
-    created_at = DateTimeField(required=True, default=datetime.datetime.now)
-    updated_at = DateTimeField(required=True, default=datetime.datetime.now)
-
-    meta = {
-        'indexes': [
-            'model',
-            '-created_at',
-            '-updated_at'
-        ]
-    }
+import db_management.setup
 
 
-print('InTrainingEvaluationHistory documents: {}'.format(
-    InTrainingEvaluationHistory.objects().count()))
-print('Model documents: {}'.format(Model.objects().count()))
+print('TrainedModel documents: {}'.format(TrainedModel.objects().count()))
+print('EvaluatedModel documents: {}'.format(EvaluatedModel.objects().count()))
 print('Sample documents: {}'.format(Sample.objects().count()))
-print('ModelEvaluationResult documents: {}'.format(ModelEvaluationResult.objects().count()))

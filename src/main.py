@@ -54,13 +54,12 @@ if args.action == 'train':
     for run in args.runs:
         print('********************* training run {} *********************'.format(run))
         print(len(trn), len(vld))
-        ev = EvaluatorClass(trn, vld, None, parser=TEXT, mode=args.action,
-                            temperature=args.temperatures[0], dm_name=args.data)
+        ev = EvaluatorClass(trn, vld, None, parser=TEXT, mode=args.action, dm_name=args.data)
 
         if args.models is None:
             raise BaseException('specify the model to be trained!')
         for model_name in args.models:
-            tracker = BestModelTracker(model_name, run, ev)
+            tracker = BestModelTracker(model_name, run, args.temperatures[0], ev)
             tracker.start()
             tracker.model.reset_model()
 
@@ -70,20 +69,18 @@ elif args.action == 'gen':
         for model_name, run, restore_type in model_run_restore_zip:
             print('********************* sample generation run: {}, restore_type: {}, temperature: {} *********************'.
                   format(run, restore_type, temperature))
-            ev = EvaluatorClass(trn, vld, tst, parser=TEXT, mode=args.action,
-                                temperature=temperature, dm_name=args.data)
-            ev.generate_samples(model_name, run, restore_type)
+            ev = EvaluatorClass(trn, vld, tst, parser=TEXT, mode=args.action, dm_name=args.data)
+            ev.generate_samples(model_name, run, restore_type, temperature)
 
 
 elif args.action == 'eval':
     del trn, vld
     for temperature in args.temperatures:
         for model_name, run, restore_type in model_run_restore_zip:
-            ev = EvaluatorClass(None, None, tst, parser=TEXT, mode=args.action,
-                                temperature=None, dm_name=args.data)
+            ev = EvaluatorClass(None, None, tst, parser=TEXT, mode=args.action, dm_name=args.data)
 
             print('********************* evaluating run{}, temperature: {} *********************'.
                   format(run, temperature))
             ev.temperature = temperature
             if args.action == 'eval':
-                ev.final_evaluate(model_name, run, restore_type)
+                ev.final_evaluate(model_name, run, restore_type, temperature)

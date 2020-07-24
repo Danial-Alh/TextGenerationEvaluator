@@ -1,4 +1,3 @@
-from typing import List
 import numpy as np
 from torchtext.data import ReversibleField
 
@@ -7,8 +6,6 @@ from metrics.bleus import Bleu, SelfBleu
 from metrics.multiset_distances import MultisetDistances
 from previous_works.model_wrappers.base_model import BaseModel
 
-from db_management.models import Sample, Model
-
 from .base_evaluator import Evaluator
 
 
@@ -16,8 +13,8 @@ class RealWorldEvaluator(Evaluator):
     test_restore_types = ['bleu3', 'bleu4', 'bleu5', 'last_iter']
 
     def __init__(self, train_ds, valid_ds, test_ds,
-                 parser: ReversibleField, mode, temperature, dm_name):
-        super().__init__(train_ds, valid_ds, test_ds, parser, mode, temperature, dm_name)
+                 parser: ReversibleField, mode, dm_name):
+        super().__init__(train_ds, valid_ds, test_ds, parser, mode, dm_name)
 
     def init_metrics(self, mode):
         if mode == 'train':
@@ -44,23 +41,23 @@ class RealWorldEvaluator(Evaluator):
             'neg_nll': {"value": -np.inf, "epoch": -1}
         }
 
-    def get_during_training_scores(self, model: BaseModel):
-        samples = model.generate_samples(self.during_training_n_sampling, {'value': None})
+    def get_during_training_scores(self, model: BaseModel, temperature):
+        samples = model.generate_samples(self.during_training_n_sampling, temperature)
         samples = self.parser.detokenize(samples)
         new_scores = {
-            'neg_nll': -model.get_nll(self.valid_ds.text, self.temperature)
+            'neg_nll': -model.get_nll(self.valid_ds.text, temperature)
         }
         for i, v in self.bleu.get_score(samples, parse=False)[0].items():
             new_scores['bleu{}'.format(i)] = v
 
         return new_scores
 
-    def add_persample_metrics(self, dumping_object, model):
+    def add_persample_metrics(self, dumping_object, model, temperature):
         if model.get_name().lower() == 'real':
             dummy_arr = [0.0 for _ in range(len(dumping_object['test']['text']))]
             return {'generated': {'nllq': dummy_arr}, 'test': {'nllq': dummy_arr}}
-        nllqfromp = model.get_persample_nll(dumping_object['test']['tokens'], self.temperature)
-        nllqfromq = model.get_persample_nll(dumping_object['generated']['tokens'], self.temperature)
+        nllqfromp = model.get_persample_nll(dumping_object['test']['tokens'], temperature)
+        nllqfromq = model.get_persample_nll(dumping_object['generated']['tokens'], temperature)
         dumping_object['generated']['nllq'] = nllqfromq
         dumping_object['test']['nllq'] = nllqfromp
 
