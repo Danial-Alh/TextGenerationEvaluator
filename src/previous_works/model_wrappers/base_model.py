@@ -1,6 +1,7 @@
 import os
 import shutil
 from functools import wraps
+from types import SimpleNamespace
 
 import torch
 from torchtext.data import ReversibleField
@@ -74,14 +75,20 @@ def remove_extra_rows(func):
 
 
 class BaseModel:
-    def __init__(self, parser: ReversibleField):
+    def __init__(self, model_identifier: SimpleNamespace, parser: ReversibleField):
         self.tracker = None
         self.model = None
         self.parser = parser
+
         self.train_data = None
         self.valid_data = None
         self.train_loc = None
         self.valid_loc = None
+
+        self.run = model_identifier.run
+        self.train_temperature = model_identifier.train_temperature
+        self.test_temperature = model_identifier.test_temperature
+        self.restore_type = model_identifier.restore_type
 
     def __del__(self):
         # if self.train_loc is not None:

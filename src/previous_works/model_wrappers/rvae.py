@@ -2,6 +2,7 @@ import numpy as np
 import torch as t
 from torch.optim import Adam
 from torchtext.data import ReversibleField
+from types import SimpleNamespace
 
 from previous_works.model_wrappers.base_model import (
     BaseModel,
@@ -10,8 +11,8 @@ from previous_works.model_wrappers.base_model import (
 
 
 class VAE(BaseModel):
-    def __init__(self, parser: ReversibleField):
-        super().__init__(parser)
+    def __init__(self, model_identifier: SimpleNamespace, parser: ReversibleField):
+        super().__init__(model_identifier, parser)
         from previous_works.rvae.train import SAVING_PATH
         self.saving_path = SAVING_PATH
 

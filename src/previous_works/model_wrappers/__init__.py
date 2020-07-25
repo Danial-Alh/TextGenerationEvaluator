@@ -1,15 +1,16 @@
 # from previous_works.model_wrappers.others import DGSAN, Real, TextGan, LeakGan
+from types import SimpleNamespace
 from previous_works.model_wrappers.texygen import TexyGen
 from previous_works.model_wrappers.rvae import VAE
 
 
-def create_model(model_name, parser):
-    model_name = model_name.lower()
+def create_model(model_identifier: SimpleNamespace, parser):
+    model_name = model_identifier.model_name.lower()
     model_class = model_name_class_mapping[model_name]
     if model_class == TexyGen:
-        m = model_class(model_name, parser)
+        m = model_class(model_name, model_identifier, parser)
     else:
-        m = model_class(parser)
+        m = model_class(model_identifier, parser)
     return m
 
 
@@ -25,4 +26,4 @@ model_name_class_mapping = {
 #     'vae': VAE,
 #     'real': Real
 # }
-all_models = model_name_class_mapping.keys()
+all_model_names = model_name_class_mapping.keys()

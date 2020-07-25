@@ -22,22 +22,31 @@ class ModelDBManager:
         self.test_temperature = self.get_stringified_temperature(test_temperature)
 
     def fetch_db_trained_model(self):
-        return TrainedModel.objects(
+        print('DB: fetching TrainedModel record.')
+        trained_model = TrainedModel.objects(
             model_name=self.model_name,
             dataset_name=self.dataset_name,
             run=self.run,
             train_temperature=self.train_temperature,
         ).get()
 
+        print('DB: done!')
+        return trained_model
+
     def fetch_db_evaluated_model(self, trained_model=None):
+        print('DB: fetching EvaluatedModel record.')
+
         if trained_model is None:
             trained_model = self.fetch_db_trained_model()
 
-        return EvaluatedModel.objects(
+        evaluated_model = EvaluatedModel.objects(
             trained_model=trained_model,
             restore_type=self.restore_type,
             test_temperature=self.test_temperature,
         ).get()
+
+        print('DB: done!')
+        return evaluated_model
 
     def create_empty_db_trained_model(self):
         print('DB: creating TrainedModel record.')
@@ -50,7 +59,6 @@ class ModelDBManager:
         try:
             trained_model.save()
         except mongoengine.errors.NotUniqueError as e:
-            print(e)
             if input('TrainedModel record found. delete it? (y/N)') == 'y':
                 self.fetch_db_trained_model().delete()
                 print("DB: old record deleted!")
@@ -119,13 +127,14 @@ class ModelDBManager:
 
         assert self.persample_metrics_exist_for_each_sample(dumping_object)
 
-        print('DB: creating EvaluatedModel record.')
-
+        trained_model = None
         try:
             trained_model = self.fetch_db_trained_model()
         except mongoengine.errors.DoesNotExist as e:
             print("DB: TrainedModel record not found! creating new one!")
-            self.create_empty_db_trained_model()
+            trained_model = self.create_empty_db_trained_model()
+
+        print('DB: creating EvaluatedModel record.')
 
         evaluated_model = EvaluatedModel(
             trained_model=trained_model,
@@ -136,7 +145,6 @@ class ModelDBManager:
         try:
             evaluated_model.save()
         except mongoengine.errors.NotUniqueError as e:
-            print(e)
             if input('EvaluatedModel record found. delete it? (y/N)') == 'y':
                 self.fetch_db_evaluated_model().delete()
                 print("DB: old record deleted!")

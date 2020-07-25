@@ -19,10 +19,10 @@ class RealWorldEvaluator(Evaluator):
     def init_metrics(self, mode):
         if mode == 'train':
             print(len(self.train_ds), len(self.valid_ds))
-            valid_sentences = self.parser.detokenize(self.valid_ds.text)
+            valid_sentences = self.parser.detokenize(self.valid_ds.text)[:100]
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
         elif mode == 'eval':
-            test_sentences = self.parser.detokenize(self.test_ds.text)
+            test_sentences = self.parser.detokenize(self.test_ds.text)[:100]
             self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)
             self.multiset_distances = MultisetDistances(test_sentences, min_n=2, max_n=5,
                                                         parser=self.parser, parse=False)
@@ -41,23 +41,23 @@ class RealWorldEvaluator(Evaluator):
             'neg_nll': {"value": -np.inf, "epoch": -1}
         }
 
-    def get_during_training_scores(self, model: BaseModel, temperature):
-        samples = model.generate_samples(self.during_training_n_sampling, temperature)
+    def get_during_training_scores(self, model: BaseModel, train_temperature):
+        samples = model.generate_samples(self.during_training_n_sampling, train_temperature)
         samples = self.parser.detokenize(samples)
         new_scores = {
-            'neg_nll': -model.get_nll(self.valid_ds.text, temperature)
+            'neg_nll': -model.get_nll(self.valid_ds.text, train_temperature)
         }
         for i, v in self.bleu.get_score(samples, parse=False)[0].items():
             new_scores['bleu{}'.format(i)] = v
 
         return new_scores
 
-    def add_persample_metrics(self, dumping_object, model, temperature):
+    def add_persample_metrics(self, dumping_object, model, test_temperature):
         if model.get_name().lower() == 'real':
             dummy_arr = [0.0 for _ in range(len(dumping_object['test']['text']))]
             return {'generated': {'nllq': dummy_arr}, 'test': {'nllq': dummy_arr}}
-        nllqfromp = model.get_persample_nll(dumping_object['test']['tokens'], temperature)
-        nllqfromq = model.get_persample_nll(dumping_object['generated']['tokens'], temperature)
+        nllqfromp = model.get_persample_nll(dumping_object['test']['tokens'], test_temperature)
+        nllqfromq = model.get_persample_nll(dumping_object['generated']['tokens'], test_temperature)
         dumping_object['generated']['nllq'] = nllqfromq
         dumping_object['test']['nllq'] = nllqfromp
 

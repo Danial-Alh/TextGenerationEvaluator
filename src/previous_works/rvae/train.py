@@ -190,7 +190,7 @@ def sample(rvae, batch_loader, n_samples, seq_len, temperatue):
                                             decoder_word_input, decoder_character_input,
                                             seed, initial_state)
             logits = logits[:, -1]
-            logits = logits / temperatue['value']
+            logits = logits / temperatue
             probs = F.softmax(logits, dim=-1).cpu()
             decoder_word_input = t.multinomial(probs, 1,)
 

@@ -1,3 +1,4 @@
+import db_management.setup
 import datetime
 
 import mongoengine
@@ -69,7 +70,7 @@ class EvaluatedModel(Document):
     restore_type = StringField(required=True)
     test_temperature = StringField(required=True)
 
-    metrics = MapField(EmbeddedDocumentField(MetricResult), required=True)
+    metrics = MapField(EmbeddedDocumentField(MetricResult))
 
     created_at = DateTimeField(required=True, default=datetime.datetime.now)
     updated_at = DateTimeField(required=True, default=datetime.datetime.now)
@@ -129,9 +130,6 @@ class Sample(Document):
     def clean(self):
         self.origin = self.origin.lower()
         assert self.origin in ('test', 'generated')
-
-
-import db_management.setup
 
 
 print('TrainedModel documents: {}'.format(TrainedModel.objects().count()))

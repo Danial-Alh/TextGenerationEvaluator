@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 
 from db_management.model_db_manager import ModelDBManager
 from evaluators.best_model_tracker import ModelDumpManager
@@ -55,32 +56,39 @@ class Evaluator:
     def get_initial_scores_during_training(self):
         pass
 
-    def get_during_training_scores(self, model: BaseModel, temperature):
+    def get_during_training_scores(self, model: BaseModel, train_temperature):
         pass
 
     def get_test_scores(self, samples):
         pass
 
-    def generate_samples(self, model_name, run, restore_type, temperature):
-        print(restore_type)
-        # for model_name in model_names:
-        print('run: {}, restore_type: {}, model_name: {}'.format(
-            run, restore_type, model_name))
+    def generate_samples(self, model_identifier: SimpleNamespace):
+        model_name = model_identifier.model_name
+        run = model_identifier.run
+        train_temperature = model_identifier.train_temperature
+        test_temperature = model_identifier.test_temperature
+        restore_type = model_identifier.restore_type
 
         if model_name != 'real':
-            model = create_model(model_name, self.parser)
-            dumper = ModelDumpManager(model, run, self.dm_name)
-            db_manager = ModelDBManager(COMPUTER_NAME, self.dm_name, model.get_name(),
-                                        run, restore_type, temperature)
+            model = create_model(model_identifier, self.parser)
+            dumper = ModelDumpManager(model, self.dm_name)
+            db_manager = ModelDBManager(
+                computer_name=COMPUTER_NAME,
+                dataset_name=self.dm_name,
+                model_name=model.get_name(),
+                run=run,
+                train_temperature=train_temperature,
+                restore_type=restore_type,
+                test_temperature=test_temperature)
 
             model.init_model((self.train_ds.text, self.valid_ds.text))
-            dumper.restore_model(restore_type)
+            dumper.restore_model()
 
-            generated_tokens = model.generate_samples(len(self.test_ds), temperature)
+            generated_tokens = model.generate_samples(len(self.test_ds), test_temperature)
             test_tokens = list(self.test_ds.text)
         else:
             model = create_model('real', None)
-            dumper = ModelDumpManager(model, run, self.dm_name)
+            dumper = ModelDumpManager(model, self.dm_name)
 
             generated_tokens = list(self.train_ds.text)
             test_tokens = list(self.test_ds.text)
@@ -94,20 +102,30 @@ class Evaluator:
         dumping_object['generated']['sentence'] = self.parser.detokenize(generated_tokens)
         dumping_object['test']['sentence'] = self.parser.detokenize(test_tokens)
 
-        self.add_persample_metrics(dumping_object, model)
+        self.add_persample_metrics(dumping_object, model, test_temperature)
 
         db_manager.dump_samples_with_persample_metrics(dumping_object)
         model.reset_model()
 
-    def add_persample_metrics(self, dumping_object, model, temperature):
+    def add_persample_metrics(self, dumping_object, model, test_temperature):
         pass
 
-    def final_evaluate(self, model_name, run, restore_type, temperature):
-        print('run: {}, restore_type: {}, model_name: {}'.format(run, restore_type, model_name))
+    def final_evaluate(self, model_identifier):
+        model_name = model_identifier.model_name
+        run = model_identifier.run
+        train_temperature = model_identifier.train_temperature
+        test_temperature = model_identifier.test_temperature
+        restore_type = model_identifier.restore_type
 
-        m = create_model(model_name, None)
-        db_manager = ModelDBManager(COMPUTER_NAME, self.dm_name, m.get_name(),
-                                    run, restore_type, temperature)
+        m = create_model(model_identifier, None)
+        db_manager = ModelDBManager(
+            computer_name=COMPUTER_NAME,
+            dataset_name=self.dm_name,
+            model_name=m.get_name(),
+            run=run,
+            train_temperature=train_temperature,
+            restore_type=restore_type,
+            test_temperature=test_temperature)
         samples = db_manager.load_samples_with_persample_metrics()
 
         print('samples: {}, refs: {}, raw tests: {}'
