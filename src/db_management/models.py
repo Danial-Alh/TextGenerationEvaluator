@@ -1,4 +1,3 @@
-import db_management.setup
 import datetime
 
 import mongoengine
@@ -130,6 +129,8 @@ class Sample(Document):
     def clean(self):
         self.origin = self.origin.lower()
         assert self.origin in ('test', 'generated')
+
+# import db_management.setup
 
 
 print('TrainedModel documents: {}'.format(TrainedModel.objects().count()))

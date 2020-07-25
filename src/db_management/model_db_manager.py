@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 from pymongo import UpdateOne
 
-from db_management.models import (TrainedModel, EvaluatedModel, Sample,
-                                  MetricHistoryRecord, MetricResult)
+from .models import (TrainedModel, EvaluatedModel, Sample,
+                     MetricHistoryRecord, MetricResult)
 
 
 class ModelDBManager:
-    def __init__(self, computer_name, dataset_name, model_name, run, train_temperature,
+    def __init__(self, computer_name, dataset_name, model_name, run, train_temperature=None,
                  restore_type=None, test_temperature=None):
         self.computer_name = computer_name
         self.dataset_name = dataset_name
@@ -284,7 +284,10 @@ class ModelDBManager:
         df_records = [
             {
                 **df_model_record,
-                **{metric: value['value'] for metric, value in sample.metrics.items()}
+                **{metric: value['value'] for metric, value in sample.metrics.items()},
+                **{field_name: getattr(sample, field_name)
+                   for field_name in Sample._fields.keys()
+                   if field_name not in ('evaluated_model', 'tokens', 'metrics')},
             }
             for sample in samples
         ]
@@ -323,8 +326,8 @@ class ModelDBManager:
 
 
 if __name__ == "__main__":
-    db_manager = ModelDBManager("", "coco", "vae", 0, "last_iter")
-    df_model = db_manager.add_db_model_evaluation_result_to_dataframe()
-    print(df_model)
-    # df_samples = dumper.add_db_samples_to_dataframe('last_iter', {'value': None})
-    # print(df_samples)
+    db_manager = ModelDBManager("", "coco", "vae", 0, restore_type="last_iter")
+    # df_model = db_manager.add_db_model_evaluation_result_to_dataframe()
+    # print(df_model)
+    df_samples = db_manager.add_db_samples_to_dataframe()
+    print(df_samples)
