@@ -88,10 +88,10 @@ def train(rvae, batch_loader, parameters, wrapper):
 
     args = SimpleNamespace(
         num_iterations=120000,
-        batch_size=32,
+        batch_size=128,
         use_cuda=t.cuda.is_available(),
         learning_rate=1e-3,
-        dropout=0.0,
+        dropout=0.1,
         use_trained=False,
         ce_result='',
         kld_result=''
@@ -109,17 +109,17 @@ def train(rvae, batch_loader, parameters, wrapper):
 
     ce_result = []
     kld_result = []
-    N_EPOCHS = 80
-    num_batches = batch_loader.num_lines[0] // args.batch_size + 1
+    batch_loader.TOTAL_EPOCHS = 80
+    batch_loader.num_batches = batch_loader.num_lines[0] // args.batch_size + 1
 
-    for epoch in trange(N_EPOCHS):
-        for _iteration in trange(num_batches):
-            iteration = epoch * num_batches + _iteration
+    for epoch in trange(batch_loader.TOTAL_EPOCHS):
+        for _iteration in trange(batch_loader.num_batches):
+            iteration = epoch * batch_loader.num_batches + _iteration
 
             cross_entropy, kld, coef = train_step(
                 iteration, args.batch_size, args.use_cuda, args.dropout)
 
-            if iteration % (num_batches//4) == 0:
+            if iteration % (batch_loader.num_batches//4) == 0:
                 print('\n')
                 print('------------TRAIN-------------')
                 print('----------ITERATION-----------')
@@ -164,7 +164,7 @@ def train(rvae, batch_loader, parameters, wrapper):
 
 def sample(rvae, batch_loader, n_samples, seq_len, temperatue):
     if temperatue['value'] is None:
-        temperatue = 1.0
+        temperatue['value'] = 1.0
     with t.no_grad():
         use_cuda = t.cuda.is_available()
         seed = np.random.normal(size=[n_samples, rvae.params.latent_variable_size])
@@ -190,7 +190,7 @@ def sample(rvae, batch_loader, n_samples, seq_len, temperatue):
                                             decoder_word_input, decoder_character_input,
                                             seed, initial_state)
             logits = logits[:, -1]
-            logits = logits / temperatue
+            logits = logits / temperatue['value']
             probs = F.softmax(logits, dim=-1).cpu()
             decoder_word_input = t.multinomial(probs, 1,)
 

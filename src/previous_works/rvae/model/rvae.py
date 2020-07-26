@@ -113,13 +113,13 @@ class RVAE(nn.Module):
                                             ignore_index=batch_loader.word_to_idx[batch_loader.pad_token],
                                             reduction='none').sum(dim=-1).mean()
 
-            loss = cross_entropy + kld_coef(i) * kld * 00
+            loss = cross_entropy + kld_coef(i, batch_loader) * kld * 00
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            return cross_entropy, kld, kld_coef(i)
+            return cross_entropy, kld, kld_coef(i, batch_loader)
 
         return train
 

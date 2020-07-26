@@ -14,11 +14,11 @@ arg_parser.add_argument('-d', '--data', type=str, help='dataset name', required=
 arg_parser.add_argument('-a', '--action', type=str, help='train/gen(erate)/eval(uate)',
                         choices=['train', 'gen', 'eval', 'export'], required=True)
 arg_parser.add_argument('-R', '--runs', type=int, help='The run number', nargs='+')
-arg_parser.add_argument('--temper_mode', type=str, help='biased/unbiased temperature mode',
+arg_parser.add_argument('--temper-mode', type=str, help='biased/unbiased temperature mode',
                         choices=['unbiased', 'biased'], default='biased')
-arg_parser.add_argument('--train_temperatures', type=float,
+arg_parser.add_argument('--train-temperatures', type=float,
                         help='train softmax temperatures', nargs='+')
-arg_parser.add_argument('--test_temperatures', type=float,
+arg_parser.add_argument('--test-temperatures', type=float,
                         help='test softmax temperatures', nargs='+')
 arg_parser.add_argument('-M', '--model-names', type=str, help='model names',
                         nargs='+', choices=all_model_names)
@@ -31,6 +31,8 @@ if args.train_temperatures is None or len(args.train_temperatures) == 0:
     args.train_temperatures = [None]
 if args.test_temperatures is None or len(args.test_temperatures) == 0:
     args.test_temperatures = [None]
+if args.restore_types is None or len(args.restore_types) == 0:
+    args.restore_types = ['undefined']
 
 args.train_temperatures = [{'type': args.temper_mode, 'value': v} for v in args.train_temperatures]
 args.test_temperatures = [{'type': args.temper_mode, 'value': v} for v in args.test_temperatures]

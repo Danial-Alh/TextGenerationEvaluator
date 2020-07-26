@@ -193,7 +193,7 @@ class ModelDBManager:
             UpdateOne(
                 {'_id': generated_samples[i].id}, {'$set': nm}
             )
-            for i, nm in enumerate(new_metrics) if len(new_metrics) != 0
+            for i, nm in enumerate(new_metrics) if len(nm) != 0
         ]
 
         Sample._get_collection().bulk_write(update_operations, ordered=False)
@@ -298,14 +298,14 @@ class ModelDBManager:
     def get_stringified_temperature(temperature):
         if temperature is None:
             return ''
-        if isinstance(temperature, str):
+        elif isinstance(temperature, str):
             return temperature
         elif temperature['value'] is None:
             return ''
         elif temperature['type'] == 'biased':
-            return '_' + format(temperature['value'], '0.6f')
+            return format(temperature['value'], '0.6f')
         elif temperature['type'] == 'unbiased':
-            return '_unbiased' + format(temperature['value'], '0.6f')
+            return 'unbiased-' + format(temperature['value'], '0.6f')
         else:
             raise BaseException('invalid temperature type!!')
 

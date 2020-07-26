@@ -22,7 +22,7 @@ class RealWorldEvaluator(Evaluator):
             valid_sentences = self.parser.detokenize(self.valid_ds.text)[:100]
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
         elif mode == 'eval':
-            test_sentences = self.parser.detokenize(self.test_ds.text)[:100]
+            test_sentences = self.parser.detokenize(self.test_ds.text)
             self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)
             self.multiset_distances = MultisetDistances(test_sentences, min_n=2, max_n=5,
                                                         parser=self.parser, parse=False)
