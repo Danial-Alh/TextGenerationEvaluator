@@ -19,7 +19,7 @@ class RealWorldEvaluator(Evaluator):
     def init_metrics(self, mode):
         if mode == 'train':
             print(len(self.train_ds), len(self.valid_ds))
-            valid_sentences = self.parser.detokenize(self.valid_ds.text)[:100]
+            valid_sentences = self.parser.detokenize(self.valid_ds.text)
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
         elif mode == 'eval':
             test_sentences = self.parser.detokenize(self.test_ds.text)

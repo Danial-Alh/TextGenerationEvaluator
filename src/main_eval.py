@@ -1,8 +1,12 @@
 from types import SimpleNamespace
 
+from data_management.data_manager import load_oracle_dataset, load_real_dataset
+
 from db_management.model_db_manager import ModelDBManager
 from db_management.models import *
 from db_management.predefined_queries import LEFT_JOIN_QUERY
+
+from evaluators.real_evaluator import RealWorldEvaluator
 
 result = TrainedModel.objects.aggregate(
     [
@@ -10,7 +14,7 @@ result = TrainedModel.objects.aggregate(
             "$match":
             {
                 # "dataset_name": {"$in": ["coco"]},
-                "model_name": {"$in": ["dgsan"]},
+                "model_name": {"$in": ["dgsan", "mle_ehsan"]},
                 # "run": {"$in": [0]},
                 # "train_temperature": {"$in": [""]},
             }
@@ -21,9 +25,10 @@ result = TrainedModel.objects.aggregate(
             {
                 # "restore_type": {"$in": ["bleu3"]},
                 # "test_temperature": {"$in": [""]},
-                # "evaluated": True
+                "evaluated": False
             }
-        }
+        },
+        {"$sort": {"dataset_name": -1}}
     ]
 )
 
@@ -31,9 +36,17 @@ result = list(result)
 
 model_identifier_dicts = [SimpleNamespace(**record) for record in result]
 
-print(model_identifier_dicts)
 print(len(model_identifier_dicts))
 
-for m in model_identifier_dicts:
-    manager = ModelDBManager("", m.dataset_name, m.model_name, m.run,
-                             m.train_temperature, m.restore_type, m.test_temperature, verbose=False)
+input("continue?")
+
+EvaluatorClass = RealWorldEvaluator
+trn = None
+for model_identifier in model_identifier_dicts:
+    if trn is None or ev.dm_name != model_identifier.dataset_name:
+        trn, vld, tst, TEXT = load_real_dataset(model_identifier.dataset_name)
+        del trn, vld
+        ev = EvaluatorClass(None, None, tst, parser=TEXT,
+                            mode="eval", dm_name=model_identifier.dataset_name)
+    print('********************* evaluating {} *********************'.format(model_identifier))
+    ev.final_evaluate(model_identifier)
