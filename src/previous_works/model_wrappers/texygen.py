@@ -9,7 +9,7 @@ from previous_works.model_wrappers.base_model import (BaseModel,
 
 class TexyGen(BaseModel):
 
-    def __init__(self, gan_name, model_identifier: SimpleNamespace, parser: ReversibleField):
+    def __init__(self, model_identifier: SimpleNamespace, parser: ReversibleField):
         from previous_works.texygen.models.leakgan.Leakgan import Leakgan
         from previous_works.texygen.models.leakgan.LeakganDataLoader import DataLoader as LeakganDL
         from previous_works.texygen.models.maligan_basic.Maligan import Maligan
@@ -36,10 +36,11 @@ class TexyGen(BaseModel):
         dls['maligan'] = MaliganDL
         dls['mle'] = MLEDL
         super().__init__(model_identifier, parser)
+        gan_name = model_identifier.model_name.lower()
         self.train_loc = None
         self.valid_loc = None
-        self.model_class = gans[gan_name.lower()]
-        self.dataloader_class = dls[gan_name.lower()]
+        self.model_class = gans[gan_name]
+        self.dataloader_class = dls[gan_name]
 
     @data2file_decorator(delete_tempfile=False)
     def init_model(self, train_samples, valid_samples, train_samples_loc, valid_samples_loc):

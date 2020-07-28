@@ -1,5 +1,6 @@
 from previous_works.model_wrappers.base_model import BaseModel, empty_sentence_remover_decorator, data2tempfile_decorator
 from data_management.parsers import Parser
+from types import SimpleNamespace
 
 
 class DGSAN(BaseModel):

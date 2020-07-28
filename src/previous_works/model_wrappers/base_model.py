@@ -156,6 +156,15 @@ class BaseModel:
         return self.__class__.__name__
 
 
+class DummyModel(BaseModel):
+    def __init__(self, model_identifier: SimpleNamespace, parser: ReversibleField):
+        super().__init__(model_identifier, parser)
+        self.model_name = model_identifier.model_name.lower()
+
+    def get_name(self):
+        return self.model_name
+
+
 if __name__ == '__main__':
     train_ds, valid_ds, test_ds, TEXT = load_real_dataset('coco')
     print(train_ds[0].text)

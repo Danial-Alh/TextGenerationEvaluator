@@ -15,27 +15,27 @@ class Evaluator:
     def update_config(dm_name):
         if dm_name.startswith('coco'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.SELFBLEU_N_S = -1
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('news'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.SELFBLEU_N_S = -1
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('ptb'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.SELFBLEU_N_S = -1
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('amazon_app_book'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.SELFBLEU_N_S = -1
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('yelp_restaurant'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.SELFBLEU_N_S = -1
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('oracle'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = 5000
+            Evaluator.SELFBLEU_N_S = -1
         else:
             raise BaseException('dm_name {} is invalid!'.format(dm_name))
 

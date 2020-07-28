@@ -17,7 +17,7 @@ class Bleu(BaseMetric):
         ref_tokens = [parser.tokenize(r) for r in samples]
         self.parser = parser
         w = {i: np.ones(i) / i for i in range(min_n, max_n + 1)}
-        self.bleu = FBLEU(ref_tokens, w)
+        self.bleu = FBLEU(ref_tokens, w, verbose=True)
         print('bleu instance created!')
 
     def get_score(self, samples, parse=True):
@@ -40,7 +40,7 @@ class SelfBleu(BaseMetric):
             samples = parser.reverse(samples)
         ref_tokens = [parser.tokenize(r) for r in samples]
         w = {i: np.ones(i) / i for i in range(min_n, max_n + 1)}
-        self.selfbleu = FSBLEU(ref_tokens, w)
+        self.selfbleu = FSBLEU(ref_tokens, w, verbose=True)
         print('self-bleu instance created!')
 
     def get_score(self):
