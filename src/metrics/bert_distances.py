@@ -14,23 +14,29 @@ class metric_names:
 
 
 class BertFeature:
-    def __init__(self, bert_model_dir, model_name='bert-base-uncased', device='cuda'):
+    def __init__(self, bert_model_dir, model_name='bert-base-uncased', batch_size=1024, device='cuda'):
         self.tokenizer = trns.BertTokenizer.from_pretrained(model_name, cache_dir=bert_model_dir)
         self.model = trns.BertModel.from_pretrained(model_name, cache_dir=bert_model_dir).to(device)
         self.device = device
+        self.batch_size = batch_size
 
     def get_features(self, sentences):
+        print('LOG: get bert feature!')
         if type(sentences) is not list:
             sentences = [sentences]
         res = []
-        for sentence in sentences:
+        for i in range(0, len(sentences), self.batch_size):
             # Add special tokens takes care of adding [CLS], [SEP], <s>... tokens in the right way for each model.
-            input_ids = torch.tensor([self.tokenizer.encode(sentence, add_special_tokens=True)])
-            input_ids = input_ids.to(self.device)
+            batch_sentences = sentences[i:i+self.batch_size]
+            input_ids = self.tokenizer(batch_sentences, padding=True,
+                                       add_special_tokens=True)['input_ids']
+            input_ids = torch.tensor(input_ids).to(self.device)
             with torch.no_grad():
                 pooler_output = self.model(input_ids)[1]
-                res.append(pooler_output)
-        return torch.cat(res, 0).cpu().numpy()
+                res.append(pooler_output.cpu())
+        res = torch.cat(res, 0).numpy()
+        print('LOG: done!')
+        return res
 
 
 # from https://github.com/bioinf-jku/TTUR/blob/master/fid.py
@@ -93,7 +99,8 @@ class FBD(BaseMetric):
         self.model_name = model_name
         self.bert_model_dir = bert_model_dir
 
-        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir, model_name=model_name, device=device)
+        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir,
+                                        model_name=model_name, device=device)
 
         self.refrence_mu, self.refrence_sigma = self._calculate_statistics(references)
 
@@ -108,9 +115,12 @@ class FBD(BaseMetric):
         return mu, sigma
 
     def get_score(self, sentences):
+        print('LOG: calculating FBD!')
         # inputs must be list of str
         mu, sigma = self._calculate_statistics(sentences)
-        return calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma)
+        result = calculate_frechet_distance(self.refrence_mu, self.refrence_sigma, mu, sigma)
+        print('LOG: done!')
+        return result
 
 
 class EMBD(BaseMetric):
@@ -119,7 +129,8 @@ class EMBD(BaseMetric):
         self.model_name = model_name
         self.bert_model_dir = bert_model_dir
 
-        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir, model_name=model_name, device=device)
+        self.bert_feature = BertFeature(bert_model_dir=bert_model_dir,
+                                        model_name=model_name, device=device)
 
         self.reference_features = self._get_features(references)  # sample * feature
         assert self.reference_features.shape[0] == len(references)
@@ -130,9 +141,12 @@ class EMBD(BaseMetric):
 
     def get_score(self, sentences):
         # inputs must be list of str
+        print('LOG: calculating EMBD!')
         features = self._get_features(sentences)
         M = ot.dist(self.reference_features, features, metric="sqeuclidean")
-        return ot.emd2(a=[], b=[], M=M)
+        result = ot.emd2(a=[], b=[], M=M)
+        print('LOG: done!')
+        return result
 
 
 if __name__ == "__main__":

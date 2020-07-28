@@ -29,6 +29,7 @@ class MultisetDistances(BaseMetric):
         self.parser = parser
 
         self.ref_ngram_counts = self._get_ngram_counts(references, parse=parse)
+        print('LOG: MultisetDistances init done!')
 
     def _get_ngram_counts(self, sentences, parse):
         samples_size = len(sentences)
@@ -72,14 +73,17 @@ class MultisetDistances(BaseMetric):
         return jaccard_value
 
     def get_jaccard_score(self, sentences, parse):
-        print('Jaccard distances preprocess upto {}!'.format(self.max_n))
+        print('LOG: calculating MS-Jaccard!')
         ngrams_intersection, ngrams_union, ngrams_abs_diff, ngrams_added = \
             self._get_union_intersection_ngrams_with_refernce_ngrams(sentences, parse)
 
         jaccard_value = self._jaccard(
             ngrams_intersection=ngrams_intersection, ngrams_union=ngrams_union)
 
-        return {n: self._final_average(jaccard_value[:n]) for n in range(self.min_n, self.max_n + 1)}
+        result = {n: self._final_average(jaccard_value[:n])
+                  for n in range(self.min_n, self.max_n + 1)}
+        print('LOG: done!')
+        return result
 
     def _sorensen(self, ngrams_abs_diff, ngrams_added):
         sorensen_value = [float(sum(ngrams_abs_diff[n].values())) / sum(ngrams_added[n].values()) for n in
