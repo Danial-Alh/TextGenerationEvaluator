@@ -77,7 +77,7 @@ class RealWorldEvaluator(Evaluator):
         selfbleu_result = SelfBleu(subsampled_sentences, 2, 5, self.parser, parse=False)\
             .get_score()[1]
         revbleu_result = ReverseBleu(test_sentences, generated_sentences, 2, 5, self.parser, parse=False)\
-            .get_score()[0]
+            .get_score()[1]
         jaccard_result = self.multiset_distances\
             .get_score('jaccard', generated_sentences, parse=False)
         fbd_result = self.fbd.get_score(generated_sentences)
@@ -95,7 +95,7 @@ class RealWorldEvaluator(Evaluator):
             mean_scores['jaccard{}'.format(i)] = v
 
         for i, v in revbleu_result.items():
-            mean_scores['revbleu{}'.format(i)] = v
+            mean_scores['revbleu{}'.format(i)] = {'value': np.mean(v), 'std': np.std(v)}
 
         for i, v in bleu_result.items():
             persample_scores['bleu{}'.format(i)] = v
