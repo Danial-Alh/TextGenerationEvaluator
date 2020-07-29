@@ -29,7 +29,7 @@ result = TrainedModel.objects.aggregate(
                 # "evaluated": False
             }
         },
-        {"$sort": {"dataset_name": -1, "test_temperature": -1}}
+        {"$sort": {"dataset_name": +1, "test_temperature": -1}}
     ]
 )
 
