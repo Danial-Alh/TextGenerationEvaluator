@@ -4,7 +4,7 @@ class OracleEvaluator(Evaluator):
 
     def __init__(self, train_data, valid_data, test_data, parser, mode, run, temperature, dm_name):
         super().__init__(train_data, valid_data, test_data, parser, mode, run, temperature, dm_name)
-        self.SELFBLEU_N_S = selfbleu_n_s
+        self.SUBSAMPLE_FRAC = selfbleu_n_s
 
     def init_metrics(self, mode):
         if mode == 'train':
@@ -73,12 +73,12 @@ class OracleEvaluator(Evaluator):
         sample_lines = [r['sentence'] for r in samples_with_additional_fields]
         sample_tokens = word_base_tokenize(sample_lines)
 
-        if self.SELFBLEU_N_S == -1:
+        if self.SUBSAMPLE_FRAC == -1:
             subsampled_tokens = sample_tokens
             subsamples_mask = [i for i in range(len(sample_tokens))]
         else:
             subsamples_mask = np.random.choice(
-                range(len(sample_tokens)), self.SELFBLEU_N_S, replace=False)
+                range(len(sample_tokens)), self.SUBSAMPLE_FRAC, replace=False)
             subsampled_tokens = np.array(sample_tokens)[subsamples_mask].tolist()
 
         nllqfromp = np.array([r['nllq'] for r in refs_with_additional_fields])

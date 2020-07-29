@@ -9,33 +9,33 @@ from utils.path_configs import COMPUTER_NAME
 
 
 class Evaluator:
-    TEST_N_S, TOTAL_RUNS, SELFBLEU_N_S, bert_path = 0, 0, 0, ''
+    TEST_N_S, TOTAL_RUNS, SUBSAMPLE_FRAC, bert_path = 0, 0, 0, ''
 
     @staticmethod
     def update_config(dm_name):
         if dm_name.startswith('coco'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = -1
+            Evaluator.SUBSAMPLE_FRAC = .25
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('news'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = -1
+            Evaluator.SUBSAMPLE_FRAC = .25
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('ptb'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = -1
+            Evaluator.SUBSAMPLE_FRAC = .25
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('amazon_app_book'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = -1
+            Evaluator.SUBSAMPLE_FRAC = .25
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('yelp_restaurant'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = -1
+            Evaluator.SUBSAMPLE_FRAC = .25
             Evaluator.BERT_PATH = B_P
         elif dm_name.startswith('oracle'):
             Evaluator.TOTAL_RUNS = 3
-            Evaluator.SELFBLEU_N_S = -1
+            Evaluator.SUBSAMPLE_FRAC = .25
         else:
             raise BaseException('dm_name {} is invalid!'.format(dm_name))
 

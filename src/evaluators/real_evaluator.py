@@ -24,8 +24,11 @@ class RealWorldEvaluator(Evaluator):
         elif mode == 'eval':
             test_sentences = self.parser.detokenize(self.test_ds.text)
             self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)
-            self.multiset_distances = MultisetDistances(test_sentences, min_n=2, max_n=5,
-                                                        parser=self.parser, parse=False)
+            self.multiset_distances_rfull = MultisetDistances(test_sentences, min_n=2, max_n=5,
+                                                              parser=self.parser, parse=False)
+            self.multiset_distances_rsub = MultisetDistances(test_sentences[:int(len(self.test_ds) * self.SUBSAMPLE_FRAC)],
+                                                             min_n=2, max_n=5,
+                                                             parser=self.parser, parse=False)
             self.fbd = FBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
             self.embd = EMBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
         elif mode == 'gen':
@@ -65,21 +68,30 @@ class RealWorldEvaluator(Evaluator):
         test_sentences = [r.sentence for r in samples['test']]
         generated_sentences = [r.sentence for r in samples['generated']]
 
-        if self.SELFBLEU_N_S == -1 or self.SELFBLEU_N_S > len(generated_sentences):
+        if self.SUBSAMPLE_FRAC == -1:
             subsamples_mask = np.arange(len(generated_sentences))
-            subsampled_sentences = generated_sentences
+            subsampled_generated_sentences = generated_sentences
         else:
             subsamples_mask = np.random.choice(np.arange(len(generated_sentences)),
-                                               self.SELFBLEU_N_S, replace=False)
-            subsampled_sentences = np.array(generated_sentences)[subsamples_mask].tolist()
+                                               int(self.SUBSAMPLE_FRAC * len(self.test_ds)),
+                                               replace=False)
+            subsampled_generated_sentences = np.array(generated_sentences)[subsamples_mask].tolist()
 
         bleu_result = self.bleu.get_score(generated_sentences, parse=False)[1]
-        selfbleu_result = SelfBleu(subsampled_sentences, 2, 5, self.parser, parse=False)\
+        selfbleu_result = SelfBleu(generated_sentences, 2, 5, self.parser, parse=False)\
             .get_score()[1]
         revbleu_result = ReverseBleu(test_sentences, generated_sentences, 2, 5, self.parser, parse=False)\
             .get_score()[1]
-        jaccard_result = self.multiset_distances\
+
+        jaccard_result_rfull_hfull = self.multiset_distances_rfull\
             .get_score('jaccard', generated_sentences, parse=False)
+        jaccard_result_rfull_hsub = self.multiset_distances_rfull\
+            .get_score('jaccard', subsampled_generated_sentences, parse=False)
+        jaccard_result_rsub_hfull = self.multiset_distances_rsub\
+            .get_score('jaccard', generated_sentences, parse=False)
+        jaccard_result_rsub_hsub = self.multiset_distances_rsub\
+            .get_score('jaccard', subsampled_generated_sentences, parse=False)
+
         fbd_result = self.fbd.get_score(generated_sentences)
         embd_result = self.embd.get_score(generated_sentences)
 
@@ -91,8 +103,16 @@ class RealWorldEvaluator(Evaluator):
             'embd': embd_result
         }
 
-        for i, v in jaccard_result.items():
-            mean_scores['jaccard{}'.format(i)] = v
+        for i in jaccard_result_rfull_hsub.keys():
+            temp_frac = int(self.SUBSAMPLE_FRAC * 100)
+            mean_scores['jaccard{}_r{}_h{}'.format(i, 100, 100)] = \
+                jaccard_result_rfull_hfull[i]
+            mean_scores['jaccard{}_r{}_h{}'.format(i, 100, temp_frac)] =\
+                jaccard_result_rfull_hsub[i]
+            mean_scores['jaccard{}_r{}_h{}'.format(i, temp_frac, 100)] =\
+                jaccard_result_rsub_hfull[i]
+            mean_scores['jaccard{}_r{}_h{}'.format(i, temp_frac, temp_frac)] =\
+                jaccard_result_rsub_hsub[i]
 
         for i, v in revbleu_result.items():
             mean_scores['revbleu{}'.format(i)] = {'value': np.mean(v), 'std': np.std(v)}

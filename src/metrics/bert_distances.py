@@ -24,6 +24,11 @@ class BertFeature:
         print('LOG: get bert feature!')
         if type(sentences) is not list:
             sentences = [sentences]
+
+        sentences_lens = [len(self.tokenizer.tokenize(s)) for s in sentences]
+        sentences = [xx[0] for xx in
+                     sorted(zip(sentences, sentences_lens), key=lambda x: x[1])]
+
         res = []
         for i in range(0, len(sentences), self.batch_size):
             # Add special tokens takes care of adding [CLS], [SEP], <s>... tokens in the right way for each model.

@@ -14,6 +14,7 @@ result = TrainedModel.objects.aggregate(
             "$match":
             {
                 "dataset_name": {"$in": ["amazon_app_book"]},
+                # "dataset_name": {"$in": ["amazon_app_book", "coco", "yelp_restaurant"]},
                 "model_name": {"$in": ["dgsan", "mle_ehsan"]},
                 # "run": {"$in": [0]},
                 # "train_temperature": {"$in": [""]},
@@ -28,7 +29,7 @@ result = TrainedModel.objects.aggregate(
                 # "evaluated": False
             }
         },
-        {"$sort": {"dataset_name": -1}}
+        {"$sort": {"dataset_name": -1, "test_temperature": -1}}
     ]
 )
 
