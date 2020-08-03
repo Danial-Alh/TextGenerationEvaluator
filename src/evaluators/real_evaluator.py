@@ -23,11 +23,11 @@ class RealWorldEvaluator(Evaluator):
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
         elif mode == 'eval':
             test_sentences = self.parser.detokenize(self.test_ds.text)
-            self.bleu = Bleu(test_sentences, 2, 5, self.parser, parse=False)
-            self.multiset_distances_rfull = MultisetDistances(test_sentences, min_n=2, max_n=5,
+            self.bleu = Bleu(test_sentences, 2, 7, self.parser, parse=False)
+            self.multiset_distances_rfull = MultisetDistances(test_sentences, min_n=2, max_n=7,
                                                               parser=self.parser, parse=False)
             self.multiset_distances_rsub = MultisetDistances(test_sentences[:int(len(self.test_ds) * self.SUBSAMPLE_FRAC)],
-                                                             min_n=2, max_n=5,
+                                                             min_n=2, max_n=7,
                                                              parser=self.parser, parse=False)
             self.fbd = FBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
             self.embd = EMBD(test_sentences, 'bert-base-uncased', self.BERT_PATH)
@@ -78,9 +78,9 @@ class RealWorldEvaluator(Evaluator):
             subsampled_generated_sentences = np.array(generated_sentences)[subsamples_mask].tolist()
 
         bleu_result = self.bleu.get_score(generated_sentences, parse=False)[1]
-        selfbleu_result = SelfBleu(generated_sentences, 2, 5, self.parser, parse=False)\
+        selfbleu_result = SelfBleu(generated_sentences, 2, 7, self.parser, parse=False)\
             .get_score()[1]
-        revbleu_result = ReverseBleu(test_sentences, generated_sentences, 2, 5, self.parser, parse=False)\
+        revbleu_result = ReverseBleu(test_sentences, generated_sentences, 2, 7, self.parser, parse=False)\
             .get_score()[1]
 
         jaccard_result_rfull_hfull = self.multiset_distances_rfull\
