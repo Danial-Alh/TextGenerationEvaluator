@@ -26,7 +26,7 @@ result = TrainedModel.objects.aggregate(
             {
                 # "restore_type": {"$in": ["bleu3"]},
                 # "test_temperature": {"$in": [""]},
-                # "evaluated": False
+                "evaluated": False
             }
         },
         {"$sort": {"dataset_name": +1, "test_temperature": -1}}

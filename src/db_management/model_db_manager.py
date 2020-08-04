@@ -23,7 +23,8 @@ class ModelDBManager:
         self.test_temperature = self.get_stringified_temperature(test_temperature)
 
     def fetch_db_trained_model(self):
-        if self.verbose: print('DB: fetching TrainedModel record.')
+        if self.verbose:
+            print('DB: fetching TrainedModel record.')
         trained_model = TrainedModel.objects(
             model_name=self.model_name,
             dataset_name=self.dataset_name,
@@ -31,11 +32,13 @@ class ModelDBManager:
             train_temperature=self.train_temperature,
         ).get()
 
-        if self.verbose: print('DB: done!')
+        if self.verbose:
+            print('DB: done!')
         return trained_model
 
     def fetch_db_evaluated_model(self, trained_model=None):
-        if self.verbose: print('DB: fetching EvaluatedModel record.')
+        if self.verbose:
+            print('DB: fetching EvaluatedModel record.')
 
         if trained_model is None:
             trained_model = self.fetch_db_trained_model()
@@ -46,11 +49,13 @@ class ModelDBManager:
             test_temperature=self.test_temperature,
         ).get()
 
-        if self.verbose: print('DB: done!')
+        if self.verbose:
+            print('DB: done!')
         return evaluated_model
 
     def create_empty_db_trained_model(self):
-        if self.verbose: print('DB: creating TrainedModel record.')
+        if self.verbose:
+            print('DB: creating TrainedModel record.')
         trained_model = TrainedModel(
             machine_name=self.computer_name, model_name=self.model_name,
             dataset_name=self.dataset_name, run=self.run, train_temperature=self.train_temperature,
@@ -62,28 +67,36 @@ class ModelDBManager:
         except mongoengine.errors.NotUniqueError as e:
             if input('TrainedModel record found. delete it? (y/N)') == 'y':
                 self.fetch_db_trained_model().delete()
-                if self.verbose: print("DB: old record deleted!")
+                if self.verbose:
+                    print("DB: old record deleted!")
                 trained_model.save()
             else:
-                if self.verbose: print("duplicate keys not allowed!")
+                if self.verbose:
+                    print("duplicate keys not allowed!")
                 raise e
 
-        if self.verbose: print('DB: done!')
+        if self.verbose:
+            print('DB: done!')
         return trained_model
 
     def init_history(self, initial_scores=None):
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
         self.create_empty_db_trained_model()
 
         if initial_scores is not None:
             self.append_to_history(initial_scores)
             self.append_to_best_history(initial_scores)
-        if self.verbose: print('DB: done!')
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: done!')
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def append_to_best_history(self, new_metrics):
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
-        if self.verbose: print('DB: append to best history.')
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: append to best history.')
         trained_model = self.fetch_db_trained_model()
 
         for metric, value in new_metrics.items():
@@ -92,12 +105,16 @@ class ModelDBManager:
             trained_model.best_history[metric].append(MetricHistoryRecord(**value))
 
         trained_model.save()
-        if self.verbose: print('DB: done!')
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: done!')
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def append_to_history(self, new_metrics):
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
-        if self.verbose: print('DB: append to history.')
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: append to history.')
         trained_model = self.fetch_db_trained_model()
 
         for metric, value in new_metrics.items():
@@ -106,8 +123,10 @@ class ModelDBManager:
             trained_model.all_history[metric].append(MetricHistoryRecord(**value))
 
         trained_model.save()
-        if self.verbose: print('DB: done!')
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: done!')
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def dump_samples_with_persample_metrics(self, dumping_object: dict):
         def convert_dmpobj_to_db_sample(dmp_obj, origin):
@@ -124,7 +143,8 @@ class ModelDBManager:
                 for i in range(len(dmp_obj[origin]['sentence']))
             ]
 
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
 
         assert self.persample_metrics_exist_for_each_sample(dumping_object)
 
@@ -132,10 +152,12 @@ class ModelDBManager:
         try:
             trained_model = self.fetch_db_trained_model()
         except mongoengine.errors.DoesNotExist as e:
-            if self.verbose: print("DB: TrainedModel record not found! creating new one!")
+            if self.verbose:
+                print("DB: TrainedModel record not found! creating new one!")
             trained_model = self.create_empty_db_trained_model()
 
-        if self.verbose: print('DB: creating EvaluatedModel record.')
+        if self.verbose:
+            print('DB: creating EvaluatedModel record.')
 
         evaluated_model = EvaluatedModel(
             trained_model=trained_model,
@@ -148,29 +170,37 @@ class ModelDBManager:
         except mongoengine.errors.NotUniqueError as e:
             if input('EvaluatedModel record found. delete it? (y/N)') == 'y':
                 self.fetch_db_evaluated_model().delete()
-                if self.verbose: print("DB: old record deleted!")
+                if self.verbose:
+                    print("DB: old record deleted!")
                 evaluated_model.save()
             else:
-                if self.verbose: print("duplicate keys not allowed!")
+                if self.verbose:
+                    print("duplicate keys not allowed!")
                 raise e
 
-        if self.verbose: print('DB: done!')
+        if self.verbose:
+            print('DB: done!')
 
-        if self.verbose: print('DB: creating { generated, test } samples record.')
+        if self.verbose:
+            print('DB: creating { generated, test } samples record.')
         generated_samples = convert_dmpobj_to_db_sample(dumping_object, origin='generated')
         test_samples = convert_dmpobj_to_db_sample(dumping_object, origin='test')
 
         Sample.objects.insert(generated_samples)
         Sample.objects.insert(test_samples)
 
-        if self.verbose: print('DB: {} generated samples and {} test samples inserted into database! done!'
-              .format(len(generated_samples), len(test_samples)))
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: {} generated samples and {} test samples inserted into database! done!'
+                  .format(len(generated_samples), len(test_samples)))
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def update_persample_metrics_for_generated_samples(self, dumping_object: dict):
 
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
-        if self.verbose: print('DB: updating generated samples metrics.')
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: updating generated samples metrics.')
 
         evaluated_model = self.fetch_db_evaluated_model()
 
@@ -185,8 +215,9 @@ class ModelDBManager:
             else:
                 ids = np.arange(len(dumping_object[metric]))
                 values = dumping_object[metric]
-                assert len(dumping_object[metric]) == len(generated_samples)
+                assert len(values) == len(generated_samples)
 
+            assert len(ids) == len(values)
             for i, v in zip(ids, values):
                 new_metrics[i]['metrics.{}'.format(metric)] = {'value': v}
 
@@ -199,12 +230,16 @@ class ModelDBManager:
 
         Sample._get_collection().bulk_write(update_operations, ordered=False)
 
-        if self.verbose: print('DB: done!')
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: done!')
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def load_samples_with_persample_metrics(self):
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
-        if self.verbose: print('DB: fetching { generated, test } samples.')
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: fetching { generated, test } samples.')
 
         trained_model = self.fetch_db_trained_model()
         evaluated_model = self.fetch_db_evaluated_model(trained_model)
@@ -217,15 +252,19 @@ class ModelDBManager:
         generated_samples = list(generated_samples)
         test_samples = list(test_samples)
 
-        if self.verbose: print('{} generated samples and {} test samples fetched! done!'.format(len(generated_samples),
-                                                                               len(test_samples)))
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('{} generated samples and {} test samples fetched! done!'.format(len(generated_samples),
+                                                                                   len(test_samples)))
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
         return {'trained_model': trained_model, 'evaluated_model': evaluated_model,
                 'generated': generated_samples, 'test': test_samples}
 
     def dump_final_evaluation_results(self, dumping_object: dict):
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
-        if self.verbose: print('DB: inserting evaluation results.')
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: inserting evaluation results.')
 
         evaluated_model = self.fetch_db_evaluated_model()
 
@@ -237,18 +276,24 @@ class ModelDBManager:
 
         evaluated_model.save()
 
-        if self.verbose: print('DB: done!')
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: done!')
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
 
     def load_final_evaluation_results(self):
-        if self.verbose: print('*' * 10 + ' DB SECTION ' + '*' * 10)
-        if self.verbose: print('DB: fetcing EvaluatedModel record.')
+        if self.verbose:
+            print('*' * 10 + ' DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: fetcing EvaluatedModel record.')
 
         trained_model = self.fetch_db_trained_model()
         evaluated_model = self.fetch_db_evaluated_model(trained_model)
 
-        if self.verbose: print('DB: done!')
-        if self.verbose: print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
+        if self.verbose:
+            print('DB: done!')
+        if self.verbose:
+            print('*' * 10 + ' END OF DB SECTION ' + '*' * 10)
         return {'trained_model': trained_model, 'evaluated_model': evaluated_model}
 
     def add_db_model_evaluation_result_to_dataframe(self, initial_dataframe=pd.DataFrame()):
@@ -316,12 +361,13 @@ class ModelDBManager:
             lens = [len(v) for v in group_value.values()]
             result = reduce(lambda prev, v: prev and (v == lens[0]), lens, True)
             if result is not True:
-                if self.verbose: print('{} : {} : {} has invalid persample metrics length'
-                      .format(
-                          group_key,
-                          list(group_value.keys()),
-                          lens)
-                      )
+                if self.verbose:
+                    print('{} : {} : {} has invalid persample metrics length'
+                          .format(
+                              group_key,
+                              list(group_value.keys()),
+                              lens)
+                          )
                 return False
         return True
 
@@ -331,4 +377,5 @@ if __name__ == "__main__":
     # df_model = db_manager.add_db_model_evaluation_result_to_dataframe()
     # if self.verbose: print(df_model)
     df_samples = db_manager.add_db_samples_to_dataframe()
-    if self.verbose: print(df_samples)
+    if self.verbose:
+        print(df_samples)

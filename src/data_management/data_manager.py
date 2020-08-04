@@ -84,8 +84,10 @@ def load_real_dataset(dataset_name):
 
     lens = [len(x) for x in trn.text]
 
-    print('vocab size: {}\ntrain size: {}\n valid size: {}\n test size: {}\n max length: {}\n mean train length: {:.2f}'
-          .format(len(TEXT.vocab), len(trn), len(vld), len(tst), TEXT.max_length, np.mean(lens)))
+    print('vocab size: {}\ntrain size: {}\n valid size: {}\n test size: {}\n '
+          'min length: {}\n max length: {}\n mean train length: {:.2f}'
+          .format(len(TEXT.vocab), len(trn), len(vld), len(tst),
+                  np.min(lens), TEXT.max_length, np.mean(lens)))
     return trn, vld, tst, TEXT
 
 

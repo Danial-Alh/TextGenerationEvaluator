@@ -121,7 +121,8 @@ class RealWorldEvaluator(Evaluator):
             persample_scores['bleu{}'.format(i)] = v
 
         for i, v in selfbleu_result.items():
-            persample_scores['selfbleu{}'.format(i)] = {'ids': subsamples_mask, 'values': v}
+            # persample_scores['selfbleu{}'.format(i)] = {'ids': subsamples_mask, 'values': v}
+            persample_scores['selfbleu{}'.format(i)] = v
 
         for key, values in persample_scores.items():
             if isinstance(values, dict):
