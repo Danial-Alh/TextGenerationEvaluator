@@ -349,9 +349,9 @@ class ModelDBManager:
         elif temperature['value'] is None:
             return ''
         elif temperature['type'] == 'biased':
-            return format(temperature['value'], '0.6f')
+            return format(temperature['value'], '0.10f')
         elif temperature['type'] == 'unbiased':
-            return 'unbiased-' + format(temperature['value'], '0.6f')
+            return 'unbiased-' + format(temperature['value'], '0.10f')
         else:
             raise BaseException('invalid temperature type!!')
 

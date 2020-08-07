@@ -19,7 +19,7 @@ result = TrainedModel.objects.aggregate(
                 "dataset_name": {"$in": ["coco"]},
                 "model_name": {"$in": ["vae"]},
                 # "run": {"$in": [0]},
-                # "train_temperature": {"$in": [""]},
+                "train_temperature": {"$in": [""]},
             }
         },
         *LEFT_JOIN_QUERY,
@@ -27,7 +27,8 @@ result = TrainedModel.objects.aggregate(
             "$match":
             {
                 # "restore_type": {"$in": ["bleu3"]},
-                # "test_temperature": {"$in": [""]},
+                # "test_temperature": {"$in": ["{:.10f}".format(1e-2)]},
+                "test_temperature": {"$in": [""]},
                 "evaluated": False
             }
         },

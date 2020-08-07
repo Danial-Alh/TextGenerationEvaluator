@@ -9,6 +9,8 @@ class Parameters:
         self.word_vocab_size = int(word_vocab_size)
         self.char_vocab_size = int(char_vocab_size)
 
+        # @todo
+
         self.word_embed_size = 128
         self.char_embed_size = 15
 
@@ -18,7 +20,8 @@ class Parameters:
         self.encoder_rnn_size = 128
         self.encoder_num_layers = 1
 
-        self.latent_variable_size = 64 
+        self.latent_variable_size = 64
+        # self.latent_variable_size = 1
 
         self.decoder_rnn_size = 64
         self.decoder_num_layers = 1

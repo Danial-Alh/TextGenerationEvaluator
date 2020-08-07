@@ -188,7 +188,7 @@ def sample(rvae, batch_loader, n_samples, seq_len, temperatue):
         for i in trange(seq_len):
             logits, initial_state, _ = rvae(0., None, None,
                                             decoder_word_input, decoder_character_input,
-                                            seed, initial_state)
+                                            z=seed, initial_state=initial_state)
             logits = logits[:, -1]
             logits = logits / temperatue['value']
             probs = F.softmax(logits, dim=-1).cpu()
@@ -200,5 +200,4 @@ def sample(rvae, batch_loader, n_samples, seq_len, temperatue):
                 decoder_word_input, decoder_character_input = decoder_word_input.cuda(), decoder_character_input.cuda()
 
     result_ids = t.stack(result_ids, dim=1)
-    result_ids = result_ids
     return result_ids

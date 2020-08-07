@@ -98,6 +98,7 @@ if args.action == 'train':
 
 elif args.action == 'gen':
     for model_identifier in model_identifier_dicts:
+        assert model_identifier.restore_type != 'undefined'
         print('********************* sample generation {} *********************'.format(model_identifier))
         ev = EvaluatorClass(trn, vld, tst, parser=TEXT, mode=args.action, dm_name=args.data)
         ev.generate_samples(model_identifier)
