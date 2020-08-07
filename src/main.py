@@ -30,7 +30,7 @@ assert not (args.runs is None and len(args.runs) == 0)
 if args.train_temperatures is None or len(args.train_temperatures) == 0:
     args.train_temperatures = [None]
 if args.test_temperatures is None or len(args.test_temperatures) == 0:
-    args.test_temperatures = [None]
+    args.test_temperatures = args.train_temperatures
 if args.restore_types is None or len(args.restore_types) == 0:
     args.restore_types = ['undefined']
 

@@ -1,7 +1,8 @@
-from .setup import *
-from .models import *
+from db_management.setup import *
+from db_management.models import *
 
-TrainedModel.objects(
-    model_name="",
-    dataset_name=""
+result = TrainedModel.objects(
+    model_name="vae",
 ).delete()
+
+print(result)
