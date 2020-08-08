@@ -28,8 +28,10 @@ class Generator(SavableModel, GeneralGenerator):
         with tf.variable_scope('generator'):
             self.g_embeddings = tf.Variable(self.init_matrix([self.num_vocabulary, self.emb_dim]))
             self.g_params.append(self.g_embeddings)
-            self.g_recurrent_unit = self.create_recurrent_unit(self.g_params)  # maps h_tm1 to h_t for generator
-            self.g_output_unit = self.create_output_unit(self.g_params)  # maps h_t to o_t (output token logits)
+            self.g_recurrent_unit = self.create_recurrent_unit(
+                self.g_params)  # maps h_tm1 to h_t for generator
+            self.g_output_unit = self.create_output_unit(
+                self.g_params)  # maps h_t to o_t (output token logits)
         from ...models.seqgan import SAVING_PATH
         SavableModel.__init__(self, self.g_params,
                               SAVING_PATH, 'generator')
@@ -103,20 +105,24 @@ class Generator(SavableModel, GeneralGenerator):
         # pretraining loss
         self.pretrain_loss = -tf.reduce_sum(
             tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
-                tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
+                tf.clip_by_value(tf.reshape(self.g_predictions,
+                                            [-1, self.num_vocabulary]), 1e-20, 1.0)
             )
-        ) / (self.sequence_length * self.batch_size)
+        # ) / (self.sequence_length * self.batch_size)
+        ) / (self.batch_size)
         self.selfdefined_persample_len_ll = \
             tf.reshape(
                 tf.reduce_sum(
-                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * \
-                    tf.log(tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)),
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) *
+                    tf.log(tf.clip_by_value(tf.reshape(self.g_predictions,
+                                                       [-1, self.num_vocabulary]), 1e-20, 1.0)),
                     axis=-1), self.x.shape)
         self.selfdefined_persample_ll = tf.reduce_sum(self.selfdefined_persample_len_ll, axis=-1)
         # training updates
         pretrain_opt = self.g_optimizer(self.learning_rate)
 
-        self.pretrain_grad, _ = tf.clip_by_global_norm(tf.gradients(self.pretrain_loss, self.g_params), self.grad_clip)
+        self.pretrain_grad, _ = tf.clip_by_global_norm(
+            tf.gradients(self.pretrain_loss, self.g_params), self.grad_clip)
         self.pretrain_updates = pretrain_opt.apply_gradients(zip(self.pretrain_grad, self.g_params))
 
         #######################################################################################################
@@ -125,13 +131,15 @@ class Generator(SavableModel, GeneralGenerator):
         self.g_loss = -tf.reduce_sum(
             tf.reduce_sum(
                 tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
-                    tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
+                    tf.clip_by_value(tf.reshape(self.g_predictions,
+                                                [-1, self.num_vocabulary]), 1e-20, 1.0)
                 ), 1) * tf.reshape(self.rewards, [-1])
         )
 
         g_opt = self.g_optimizer(self.learning_rate)
 
-        self.g_grad, _ = tf.clip_by_global_norm(tf.gradients(self.g_loss, self.g_params), self.grad_clip)
+        self.g_grad, _ = tf.clip_by_global_norm(
+            tf.gradients(self.g_loss, self.g_params), self.grad_clip)
         self.g_updates = g_opt.apply_gradients(zip(self.g_grad, self.g_params))
         GeneralGenerator.__init__(self)
 

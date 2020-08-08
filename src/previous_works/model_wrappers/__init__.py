@@ -13,8 +13,8 @@ def create_model(model_identifier: SimpleNamespace, parser):
 
 
 model_name_class_mapping = {
-    'seqgan': TexyGen,
-    'rankgan': TexyGen, 'maligan': TexyGen, 'mle': TexyGen,
+    'seqgan': TexyGen, 'rankgan': TexyGen,
+    'maligan': TexyGen, 'mle': TexyGen,
     'vae': VAE,
     'mle_ehsan': DummyModel, 'dgsan': DummyModel
 }

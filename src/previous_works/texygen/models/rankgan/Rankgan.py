@@ -20,8 +20,8 @@ class Rankgan(Gan):
         super().__init__()
         # you can change parameters, generator here
         self.vocab_size = 20
-        self.emb_dim = 32
-        self.hidden_dim = 32
+        self.emb_dim = 128
+        self.hidden_dim = 64
         self.sequence_length = 20
         self.filter_size = [2, 3]
         self.num_filters = [100, 200]

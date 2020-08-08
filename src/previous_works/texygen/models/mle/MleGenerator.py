@@ -104,7 +104,8 @@ class Generator(SavableModel, GeneralGenerator):
             tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
                 tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
             )
-        ) / (self.sequence_length * self.batch_size)
+        # ) / (self.sequence_length * self.batch_size)
+        ) / (self.batch_size)
         self.selfdefined_persample_len_ll = \
             tf.reshape(
                 tf.reduce_sum(

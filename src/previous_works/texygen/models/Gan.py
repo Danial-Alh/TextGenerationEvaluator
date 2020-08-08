@@ -208,6 +208,7 @@ class GeneralGenerator(object):
         self.selfdefined_temp_persample_ll = tf.reduce_sum(self.selfdefined_temp_persample_len_ll, axis=-1)
 
     def unbiased_temperature_init(self):
+        return
         self.unbiased_temperature = tf.placeholder(tf.float32)
         self.unbiased_temperature_gen_x = tensor_array_ops.TensorArray(dtype=tf.int32, size=self.sequence_length,
                                                                        dynamic_size=False,
