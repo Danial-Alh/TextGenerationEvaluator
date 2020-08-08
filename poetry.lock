@@ -177,7 +177,7 @@ description = "A fast multithreaded C++ implementation of nltk BLEU."
 name = "fast-bleu"
 optional = false
 python-versions = ">=3.3"
-version = "0.0.84"
+version = "0.0.85"
 
 [[package]]
 category = "main"
@@ -960,7 +960,7 @@ python-versions = "*"
 version = "0.14.0"
 
 [metadata]
-content-hash = "55f4df3bd284863046ea16906b8325ee854fa34086e8fba4a5f863bdfbdc2f34"
+content-hash = "82e683cb6dfc5c802dcf2819f973d0d9519087046fc3501138931f75cfe02c3c"
 lock-version = "1.0"
 python-versions = "3.7.7"
 
@@ -1095,7 +1095,7 @@ cython = [
     {file = "Cython-0.29.20.tar.gz", hash = "sha256:22d91af5fc2253f717a1b80b8bb45acb655f643611983fd6f782b9423f8171c7"},
 ]
 fast-bleu = [
-    {file = "fast-bleu-0.0.84.tar.gz", hash = "sha256:ff257cdd2e6cde73608b162851788fefbeae48c4dc8fb0144e04380ea319a64f"},
+    {file = "fast-bleu-0.0.85.tar.gz", hash = "sha256:97ea9bf7c60eeb66e298b5a55a1dda8c5442600dde0a3a86cf909dd9eabd8409"},
 ]
 filelock = [
     {file = "filelock-3.0.12-py3-none-any.whl", hash = "sha256:929b7d63ec5b7d6b71b0fa5ac14e030b3f70b75747cef1b10da9b879fef15836"},

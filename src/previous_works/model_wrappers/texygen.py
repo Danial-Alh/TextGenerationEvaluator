@@ -49,9 +49,6 @@ class TexyGen(BaseModel):
         self.model.init_real_trainng(self.parser)
         self.load()
 
-    # def set_train_val_data(self, train_data, valid_data):
-    #     super().set_train_val_data(train_data, valid_data)
-
     def train(self):
         self.model.train_real(self.train_samples_loc, self)
         self.tracker.update_metrics(last_iter=True)
