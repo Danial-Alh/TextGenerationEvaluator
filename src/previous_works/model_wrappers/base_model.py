@@ -43,6 +43,7 @@ def data2file_decorator(delete_tempfile: bool):
         def wrapper(self, samples, *args, **kwargs):
             if not isinstance(samples, tuple):
                 samples = (samples,)
+            samples = [list(s) for s in samples]
             samples_locs = [
                 convert_and_write_samples_to_temp_file
                 (

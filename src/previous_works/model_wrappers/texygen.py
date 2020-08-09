@@ -69,7 +69,8 @@ class TexyGen(BaseModel):
     def __init_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.Nll import Nll
         valid_dataloader = self.dataloader_class(batch_size=self.model.batch_size,
-                                                 seq_length=self.parser.max_length)
+                                                 seq_length=self.parser.max_length,
+                                                 pad_token=self.parser.vocab.stoi[self.parser.pad_token])
         valid_dataloader.create_batches(data_loc)
 
         inll = Nll(data_loader=valid_dataloader, rnn=self.model.generator, sess=self.model.sess,
@@ -80,14 +81,15 @@ class TexyGen(BaseModel):
     def __init_persample_nll(self, data_loc, temperature):
         from previous_works.texygen.utils.metrics.ItemFetcher import ItemFetcher
         dataloader = self.dataloader_class(batch_size=self.model.batch_size,
-                                           seq_length=self.parser.max_length)
+                                           seq_length=self.parser.max_length,
+                                           pad_token=self.parser.vocab.stoi[self.parser.pad_token])
         dataloader.create_batches(data_loc)
         if temperature['value'] is None:
-            item_to_be_fetched = self.model.generator.selfdefined_persample_ll
+            item_to_be_fetched = self.model.generator.selfdefined_persample_nll
         elif temperature['type'] == 'biased':
-            item_to_be_fetched = self.model.generator.selfdefined_temp_persample_ll
+            item_to_be_fetched = self.model.generator.selfdefined_temp_persample_nll
         elif temperature['type'] == 'unbiased':
-            item_to_be_fetched = self.model.generator.unbiased_temperature_persample_ll
+            item_to_be_fetched = self.model.generator.unbiased_temperature_persample_nll
         else:
             raise BaseException('invalid temperature type!')
         inll = ItemFetcher(data_loader=dataloader, rnn=self.model.generator,
