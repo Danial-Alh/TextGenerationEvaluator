@@ -34,16 +34,17 @@ class BestModelTracker:
             print('{}, epoch -, last iter model saved!'.format(self.model_identifier))
             return
         
+        new_metrics = {metric: {'value': v, 'epoch': epoch}
+                       for metric, v
+                       in self.evaluator.get_during_training_scores(self.model, self.model_identifier.train_temperature).items()}
+        print(new_metrics)
+        self.db_manager.append_to_history(new_metrics)
+
         epoch_treshold_for_evaluation = self.model.get_training_epoch_threshold_for_evaluation()
         if isinstance(epoch_treshold_for_evaluation, int) and epoch < epoch_treshold_for_evaluation:
             print('{}, epoch {}, global epoch threshold ({}) not satisfied!'
                       .format(self.model_identifier, epoch, epoch_treshold_for_evaluation))
             return
-
-        new_metrics = {metric: {'value': v, 'epoch': epoch}
-                       for metric, v
-                       in self.evaluator.get_during_training_scores(self.model, self.model_identifier.train_temperature).items()}
-        print(new_metrics)
         assert not (False in [m in new_metrics for m in epoch_treshold_for_evaluation])
 
         updated_metrics = {}
@@ -61,7 +62,6 @@ class BestModelTracker:
                 updated_metrics[metric] = new_v
 
         self.db_manager.append_to_best_history(updated_metrics)
-        self.db_manager.append_to_history(new_metrics)
 
     def start(self):
         initial_scores = self.evaluator.get_initial_scores_during_training()
