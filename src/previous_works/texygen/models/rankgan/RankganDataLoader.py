@@ -3,11 +3,12 @@ import random
 
 
 class DataLoader():
-    def __init__(self, batch_size, seq_length, end_token=0):
+    def __init__(self, batch_size, seq_length, end_token=None, pad_token=None):
         self.batch_size = batch_size
         self.token_stream = []
         self.seq_length = seq_length
         self.end_token = end_token
+        self.pad_token = pad_token
 
     def create_batches(self, data_file):
         global pos_size
@@ -16,13 +17,23 @@ class DataLoader():
             for line in f:
                 line = line.strip()
                 line = line.split()
-                parse_line = [int(x) for x in line]
-                if len(parse_line) == self.seq_length:
-                    self.token_stream.append(parse_line)
+                parse_line = [int(x) for x in line[1:]]
+                if len(parse_line) > self.seq_length:
+                    self.token_stream.append(parse_line[:self.seq_length])
+                else:
+                    assert self.pad_token != None
+                    while len(parse_line) < self.seq_length:
+                        parse_line.append(self.pad_token)
+                    if len(parse_line) == self.seq_length:
+                        self.token_stream.append(parse_line)
 
-        self.num_batch = int(len(self.token_stream) / self.batch_size)
+        self.original_datasize = len(self.token_stream)
+        if len(self.token_stream) % self.batch_size != 0:
+            self.token_stream.extend([[self.pad_token] * self.seq_length]
+                                     * (self.batch_size - (len(self.token_stream) % self.batch_size)))
         self.data_size = len(self.token_stream)
         pos_size = self.data_size
+        self.num_batch = int(len(self.token_stream) / self.batch_size)
         self.token_stream = self.token_stream[:self.num_batch * self.batch_size]
         self.sequence_batch = np.split(np.array(self.token_stream), self.num_batch, 0)
         self.pointer = 0
@@ -57,7 +68,7 @@ class DisDataloader():
                 if (random.random() * pos_size) < 10000:
                     line = line.strip()
                     line = line.split()
-                    parse_line = [int(x) for x in line]
+                    parse_line = [int(x) for x in line[1:]]
                     positive_examples.append(parse_line)
         with open(negative_file)as fin:
             for line in fin:

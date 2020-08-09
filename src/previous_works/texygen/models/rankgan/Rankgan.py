@@ -70,9 +70,9 @@ class Rankgan(Gan):
         self.add_metric(docsim)
 
     def train_discriminator(self):
-        generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
+        generate_samples(self.sess, self.generator, self.batch_size, len(self.wrapper.train_samples), self.generator_file)
         self.dis_data_loader.load_train_data(self.oracle_file, self.generator_file)
-        for _ in range(3):
+        for i in range(self.dis_data_loader.num_batch):
             self.dis_data_loader.next_batch()
             x_batch, y_batch, ref_batch = self.dis_data_loader.next_batch()
             feed = {
@@ -269,13 +269,13 @@ class Rankgan(Gan):
         assert parser is not None
         self.sequence_length, self.vocab_size = parser.max_length, len(parser.vocab)
         word_index_dict, index_word_dict = parser.vocab.stoi, parser.vocab.itos,
-        self.start_token, self.end_token = parser.vocab.stoi[parser.init_token],\
-            parser.vocab.stoi[parser.eos_token]
+        self.start_token, self.end_token, self.pad_token = parser.vocab.stoi[parser.init_token],\
+            parser.vocab.stoi[parser.eos_token], parser.vocab.stoi[parser.pad_token]
         print('parser set from outside!')
 
         generator = Generator(num_vocabulary=self.vocab_size, batch_size=self.batch_size, emb_dim=self.emb_dim,
                               hidden_dim=self.hidden_dim, sequence_length=self.sequence_length,
-                              start_token=self.start_token)
+                              start_token=self.start_token, pad_token=self.pad_token)
         self.set_generator(generator)
 
         discriminator = Discriminator(sequence_length=self.sequence_length, num_classes=2, vocab_size=self.vocab_size,
@@ -285,7 +285,7 @@ class Rankgan(Gan):
         self.set_discriminator(discriminator)
 
         gen_dataloader = DataLoader(batch_size=self.batch_size, seq_length=self.sequence_length,
-                                    end_token=self.end_token)
+                                    end_token=self.end_token, pad_token=self.pad_token)
         oracle_dataloader = None
         dis_dataloader = DisDataloader(batch_size=self.batch_size, seq_length=self.sequence_length)
 
@@ -356,5 +356,5 @@ class Rankgan(Gan):
                 self.evaluate()
 
             self.reward.update_params()
-            for _ in range(15):
+            for _ in range(1):
                 self.train_discriminator()

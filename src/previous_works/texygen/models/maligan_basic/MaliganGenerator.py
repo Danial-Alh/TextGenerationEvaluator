@@ -8,7 +8,7 @@ from ...models.Gan import SavableModel
 
 class Generator(SavableModel, GeneralGenerator):
     def __init__(self, num_vocabulary, batch_size, emb_dim, hidden_dim,
-                 sequence_length, start_token,
+                 sequence_length, start_token, pad_token,
                  learning_rate=0.01, reward_gamma=0.95):
         self.num_vocabulary = num_vocabulary
         self.batch_size = batch_size
@@ -16,6 +16,7 @@ class Generator(SavableModel, GeneralGenerator):
         self.hidden_dim = hidden_dim
         self.sequence_length = sequence_length
         self.start_token = tf.constant([start_token] * self.batch_size, dtype=tf.int32)
+        self.pad_token = tf.constant(pad_token, dtype=tf.int32)
         self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
         self.reward_gamma = reward_gamma
         self.g_params = []
@@ -101,19 +102,24 @@ class Generator(SavableModel, GeneralGenerator):
                                           perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
 
         # pretraining loss
-        self.pretrain_loss = -tf.reduce_sum(
-            tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
-                tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
-            )
-        # ) / (self.sequence_length * self.batch_size)
-        ) / (self.batch_size)
-        self.selfdefined_persample_len_ll = \
-            tf.reshape(
+        # self.pretrain_loss = -tf.reduce_sum(
+        #     tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
+        #         tf.clip_by_value(tf.reshape(self.g_predictions,
+        #                                     [-1, self.num_vocabulary]), 1e-20, 1.0)
+        #     )
+        # # ) / (self.sequence_length * self.batch_size)
+        # ) / (self.batch_size)
+        self.pad_mask = tf.cast(tf.cast(self.x != self.pad_token, tf.int32), tf.float32)
+        self.selfdefined_persample_len_nll = \
+            -tf.reshape(
                 tf.reduce_sum(
-                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * \
-                    tf.log(tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)),
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) *
+                    tf.log(tf.clip_by_value(tf.reshape(self.g_predictions,
+                                                       [-1, self.num_vocabulary]), 1e-20, 1.0)),
                     axis=-1), self.x.shape)
-        self.selfdefined_persample_ll = tf.reduce_sum(self.selfdefined_persample_len_ll, axis=-1)
+        self.selfdefined_persample_len_nll = self.selfdefined_persample_len_nll * self.pad_mask
+        self.selfdefined_persample_nll = tf.reduce_sum(self.selfdefined_persample_len_nll, axis=-1)
+        self.pretrain_loss = tf.reduce_mean(self.selfdefined_persample_ll)
 
         # training updates
         pretrain_opt = self.g_optimizer(self.learning_rate)

@@ -2,7 +2,8 @@ import numpy as np
 
 
 class DataLoader():
-    def __init__(self, batch_size, seq_length, end_token=0):
+    def __init__(self, batch_size, seq_length, end_token=None, pad_token=None):
+        self.pad_token = pad_token
         self.batch_size = batch_size
         self.token_stream = []
         self.seq_length = seq_length
@@ -14,15 +15,20 @@ class DataLoader():
         with open(data_file, 'r') as raw:
             for line in raw:
                 line = line.strip().split()
-                parse_line = [int(x) for x in line]
+                parse_line = [int(x) for x in line[1:]]
                 if len(parse_line) > self.seq_length:
                     self.token_stream.append(parse_line[:self.seq_length])
                 else:
+                    assert self.pad_token != None
                     while len(parse_line) < self.seq_length:
-                        parse_line.append(self.end_token)
+                        parse_line.append(self.pad_token)
                     if len(parse_line) == self.seq_length:
                         self.token_stream.append(parse_line)
 
+        self.original_datasize = len(self.token_stream)
+        if len(self.token_stream) % self.batch_size != 0:
+            self.token_stream.extend([[self.pad_token] * self.seq_length]
+                                     * (self.batch_size - (len(self.token_stream) % self.batch_size)))
         self.num_batch = int(len(self.token_stream) / self.batch_size)
         self.token_stream = self.token_stream[:self.num_batch * self.batch_size]
         self.sequence_batch = np.split(np.array(self.token_stream), self.num_batch, 0)
@@ -52,7 +58,7 @@ class DisDataloader():
             for line in fin:
                 line = line.strip()
                 line = line.split()
-                parse_line = [int(x) for x in line]
+                parse_line = [int(x) for x in line[1:]]
                 if len(parse_line) == self.seq_length:
                     positive_examples.append(parse_line)
         with open(negative_file)as fin:

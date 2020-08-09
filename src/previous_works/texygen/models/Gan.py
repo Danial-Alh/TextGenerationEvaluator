@@ -113,7 +113,8 @@ class Gan:
         print('generating {} samples from {}!'.format(n_samples, self.__class__.__name__))
         if self.__class__.__name__ == 'Leakgan':
             from ..models.leakgan import Leakgan
-            codes = Leakgan.generate_samples_gen(self.sess, self.generator, 64, n_samples, self.test_file)
+            codes = Leakgan.generate_samples_gen(
+                self.sess, self.generator, 64, n_samples, self.test_file)
         else:
             codes = generate_samples(self.sess, self.generator, 64, n_samples, self.test_file)
         print('samples generated!')
@@ -192,20 +193,17 @@ class GeneralGenerator(object):
         self.temp_g_predictions = tf.transpose(self.temp_g_predictions.stack(),
                                                perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
 
-        self.temp_pretrain_loss = -tf.reduce_sum(
-            tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * tf.log(
-                tf.clip_by_value(tf.reshape(self.temp_g_predictions, [-1, self.num_vocabulary]), 1e-20, 1.0)
-            )
-        ) / (self.sequence_length * self.batch_size)
-
-        self.selfdefined_temp_persample_len_ll = \
-            tf.reshape(
+        self.selfdefined_temp_persample_len_nll = \
+            -tf.reshape(
                 tf.reduce_sum(
-                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) * \
+                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_vocabulary, 1.0, 0.0) *
                     tf.log(tf.clip_by_value(tf.reshape(self.temp_g_predictions, [-1, self.num_vocabulary]),
                                             1e-20, 1.0)),
                     axis=-1), self.x.shape)
-        self.selfdefined_temp_persample_ll = tf.reduce_sum(self.selfdefined_temp_persample_len_ll, axis=-1)
+        self.selfdefined_temp_persample_len_nll = self.selfdefined_temp_persample_len_nll * self.pad_mask
+        self.selfdefined_temp_persample_nll =\
+            tf.reduce_sum(self.selfdefined_temp_persample_len_nll, axis=-1)
+        self.temp_pretrain_loss = tf.reduce_mean(self.selfdefined_temp_persample_nll)
 
     def unbiased_temperature_init(self):
         return
@@ -214,7 +212,8 @@ class GeneralGenerator(object):
                                                                        dynamic_size=False,
                                                                        element_shape=(
                                                                            self.unbiased_generation_batch_size,))
-        ln_p = tf.zeros((self.unbiased_generation_batch_size * self.fork_degree,), name='ln_p_temps')
+        ln_p = tf.zeros((self.unbiased_generation_batch_size *
+                         self.fork_degree,), name='ln_p_temps')
 
         # When current index i < given_num, use the provided tokens as the input at each time step
         def get_expected_foraward_prbability(prefix_len, x_start, h_start):
@@ -268,7 +267,8 @@ class GeneralGenerator(object):
             h_t = self.g_recurrent_unit(x_t, h_tm1)  # hidden_memory_tuple
             o_t = self.g_output_unit(h_t)  # batch x vocab , logits not prob
             o_t, prob_t = get_powered_probs(o_t, i, h_t)
-            next_token = tf.cast(tf.reshape(tf.multinomial(o_t, 1), (self.unbiased_generation_batch_size,)), tf.int32)
+            next_token = tf.cast(tf.reshape(tf.multinomial(
+                o_t, 1), (self.unbiased_generation_batch_size,)), tf.int32)
             x_tp1 = tf.nn.embedding_lookup(self.g_embeddings, next_token)  # batch x emb_dim
             gen_x = gen_x.write(i, next_token)  # indices, batch_size
             return i + 1, x_tp1, h_t, gen_x
@@ -277,8 +277,8 @@ class GeneralGenerator(object):
             cond=lambda i, _1, _2, _3: i < self.sequence_length,
             body=_g_recurrence_2,
             loop_vars=(0,
-                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token)[:self.unbiased_generation_batch_size]
-                       , self.h0[:, :self.unbiased_generation_batch_size, :],
+                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token)[
+                           :self.unbiased_generation_batch_size], self.h0[:, :self.unbiased_generation_batch_size, :],
                        self.unbiased_temperature_gen_x),
             back_prop=False)
 
@@ -325,16 +325,18 @@ class GeneralGenerator(object):
                                                                   (1, 0, 2))
         self.unbiased_temperature_persample_len_ll = \
             tf.reduce_sum(
-                tf.one_hot(self.dynamic_batch_x, self.num_vocabulary, 1.0, 0.0, axis=-1) * \
+                tf.one_hot(self.dynamic_batch_x, self.num_vocabulary, 1.0, 0.0, axis=-1) *
                 self.unbiased_temperature_persample_len_ll, axis=-1)
-        self.unbiased_temperature_persample_ll = tf.reduce_sum(self.unbiased_temperature_persample_len_ll, axis=-1)
+        self.unbiased_temperature_persample_ll = tf.reduce_sum(
+            self.unbiased_temperature_persample_len_ll, axis=-1)
 
     def temperature_generate(self, sess, temperature):
         outputs = sess.run(self.temp_gen_x, {self.temperature: temperature})
         return outputs
 
     def unbiased_temperature_generate(self, sess, temperature):
-        samples = sess.run(self.unbiased_temperature_gen_x, {self.unbiased_temperature: temperature})
+        samples = sess.run(self.unbiased_temperature_gen_x, {
+                           self.unbiased_temperature: temperature})
         return samples
 
 
