@@ -111,6 +111,12 @@ class TexyGen(BaseModel):
         score = persample_nll.get_score()
         return [float(s) for s in score]
 
+    def get_training_epoch_threshold_for_evaluation(self):
+        if self.get_name() != "mle":
+            # return {"neg_nll": 80, "neg_fbd": 80}
+            return 80
+        return super().get_training_epoch_threshold_for_evaluation()
+
     def get_saving_path(self):
         return self.model_class.saving_path
 

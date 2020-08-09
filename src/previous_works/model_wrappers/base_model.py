@@ -137,6 +137,9 @@ class BaseModel:
     def get_persample_nll(self, samples, samples_loc, temperature):
         pass
 
+    def get_training_epoch_threshold_for_evaluation(self):
+        return -1
+
     def reset_model(self):
         pass
 

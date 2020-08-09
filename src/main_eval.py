@@ -14,9 +14,9 @@ result = TrainedModel.objects.aggregate(
             "$match":
             {
                 # "dataset_name": {"$in": ["amazon_app_book", "coco", "yelp_restaurant"]},
-                "dataset_name": {"$in": ["amazon_app_book"]},
+                "dataset_name": {"$in": ["coco"]},
                 # "model_name": {"$in": ["dgsan", "mle_ehsan"]},
-                "model_name": {"$in": ["vae"]},
+                "model_name": {"$in": ["seqgan"]},
                 # "run": {"$in": [0]},
                 "train_temperature": {"$in": [""]},
             }
