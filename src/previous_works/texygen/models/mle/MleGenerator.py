@@ -118,7 +118,7 @@ class Generator(SavableModel, GeneralGenerator):
                     axis=-1), self.x.shape)
         self.selfdefined_persample_len_nll = self.selfdefined_persample_len_nll * self.pad_mask
         self.selfdefined_persample_nll = tf.reduce_sum(self.selfdefined_persample_len_nll, axis=-1)
-        self.pretrain_loss = tf.reduce_mean(self.selfdefined_persample_ll)
+        self.pretrain_loss = tf.reduce_mean(self.selfdefined_persample_nll)
         # training updates
         pretrain_opt = self.g_optimizer(self.learning_rate)
 

@@ -21,6 +21,7 @@ class RealWorldEvaluator(Evaluator):
             print(len(self.train_ds), len(self.valid_ds))
             valid_sentences = self.parser.detokenize(self.valid_ds.text)
             self.bleu = Bleu(valid_sentences, 3, 5, self.parser, parse=False)
+            self.fbd = FBD(valid_sentences, 'bert-base-uncased', self.BERT_PATH)
         elif mode == 'eval':
             test_sentences = self.parser.detokenize(self.test_ds.text)
             self.bleu = Bleu(test_sentences, 2, 10, self.parser, parse=False)
@@ -41,14 +42,16 @@ class RealWorldEvaluator(Evaluator):
             'bleu3': {"value": 0.0, "epoch": -1},
             'bleu4': {"value": 0.0, "epoch": -1},
             'bleu5': {"value": 0.0, "epoch": -1},
-            'neg_nll': {"value": -np.inf, "epoch": -1}
+            'neg_nll': {"value": -np.inf, "epoch": -1},
+            'neg_fbd': {"value": -np.inf, "epoch": -1},
         }
 
     def get_during_training_scores(self, model: BaseModel, train_temperature):
         samples = model.generate_samples(self.during_training_n_sampling, train_temperature)
         samples = self.parser.detokenize(samples)
         new_scores = {
-            'neg_nll': -model.get_nll(self.valid_ds.text, train_temperature)
+            'neg_nll': -model.get_nll(self.valid_ds.text, train_temperature),
+            'neg_fbd': -self.fbd.get_score(samples)
         }
         for i, v in self.bleu.get_score(samples, parse=False)[0].items():
             new_scores['bleu{}'.format(i)] = v
