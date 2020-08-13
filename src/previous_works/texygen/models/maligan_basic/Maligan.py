@@ -301,7 +301,7 @@ class Maligan(Gan):
                 outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.end_token))
 
         self.pre_epoch_num = 80
-        self.adversarial_epoch_num = 100
+        self.adversarial_epoch_num = 200
         self.log = open('experiment-log-maligan-real.csv', 'w')
         generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
         self.gen_data_loader.create_batches(self.oracle_file)

@@ -109,7 +109,7 @@ def train(rvae, batch_loader, parameters, wrapper):
 
     ce_result = []
     kld_result = []
-    batch_loader.TOTAL_EPOCHS = 80
+    batch_loader.TOTAL_EPOCHS = 1000
     batch_loader.num_batches = batch_loader.num_lines[0] // args.batch_size + 1
 
     for epoch in trange(batch_loader.TOTAL_EPOCHS):

@@ -159,7 +159,7 @@ class Mle(Gan):
             with open(self.test_file, 'w') as outfile:
                 outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.end_token))
 
-        self.pre_epoch_num = 80
+        self.pre_epoch_num = 1000
         self.adversarial_epoch_num = 100
         self.log = open('experiment-log-mle-real.csv', 'w')
         generate_samples(self.sess, self.generator, self.batch_size,

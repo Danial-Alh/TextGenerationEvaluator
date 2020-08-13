@@ -49,9 +49,16 @@ class RealWorldEvaluator(Evaluator):
     def get_during_training_scores(self, model: BaseModel, train_temperature):
         samples = model.generate_samples(self.during_training_n_sampling, train_temperature)
         samples = self.parser.detokenize(samples)
+        
+        try:
+            fbd_score = self.fbd.get_score(samples)
+        except ValueError as e:
+            print(e)
+            fbd_score = np.inf
+
         new_scores = {
             'neg_nll': -model.get_nll(self.valid_ds.text, train_temperature),
-            'neg_fbd': -self.fbd.get_score(samples)
+            'neg_fbd': -fbd_score
         }
         for i, v in self.bleu.get_score(samples, parse=False)[0].items():
             new_scores['bleu{}'.format(i)] = v
@@ -95,7 +102,12 @@ class RealWorldEvaluator(Evaluator):
         jaccard_result_rsub_hsub = self.multiset_distances_rsub\
             .get_score('jaccard', subsampled_generated_sentences, parse=False)
 
-        fbd_result = self.fbd.get_score(generated_sentences)
+        try:
+            fbd_result = self.fbd.get_score(generated_sentences)
+        except ValueError as e:
+            print(e)
+            fbd_result = np.inf
+
         embd_result = self.embd.get_score(generated_sentences)
 
         persample_scores = {}

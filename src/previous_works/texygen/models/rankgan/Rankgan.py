@@ -214,7 +214,7 @@ class Rankgan(Gan):
         self.load_generator_discriminator()
 
         self.pre_epoch_num = 80
-        self.adversarial_epoch_num = 100
+        self.adversarial_epoch_num = 00
         self.log = open('experiment-log-rankgan-cfg.csv', 'w')
         generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
         self.gen_data_loader.create_batches(self.oracle_file)
@@ -309,7 +309,7 @@ class Rankgan(Gan):
                 outfile.write(code_to_text(codes=codes, dictionary=dict, eof_code=self.end_token))
 
         self.pre_epoch_num = 80
-        self.adversarial_epoch_num = 100
+        self.adversarial_epoch_num = 200
         self.log = open('experiment-log-rankgan-real.csv', 'w')
         generate_samples(self.sess, self.generator, self.batch_size, self.generate_num, self.generator_file)
         self.gen_data_loader.create_batches(self.oracle_file)
