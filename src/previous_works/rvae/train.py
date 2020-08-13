@@ -156,7 +156,8 @@ def train(rvae, batch_loader, parameters, wrapper):
         print('------------------------------')
         print(samples[0])
         print('------------------------------')
-        wrapper.update_metrics(epoch=epoch+1)
+        if epoch % 5 == 0:
+            wrapper.update_metrics(epoch=epoch+1)
 
     # np.save(CURRENT_ROOT_PATH + 'ce_result_{}.npy'.format(args.ce_result), np.array(ce_result))
     # np.save(CURRENT_ROOT_PATH + 'kld_result_npy_{}'.format(args.kld_result), np.array(kld_result))

@@ -33,7 +33,7 @@ class BestModelTracker:
             self.dump_manager.store_better_model('last_iter')
             print('{}, epoch -, last iter model saved!'.format(self.model_identifier))
             return
-        
+
         new_metrics = {metric: {'value': v, 'epoch': epoch}
                        for metric, v
                        in self.evaluator.get_during_training_scores(self.model, self.model_identifier.train_temperature).items()}
@@ -41,18 +41,21 @@ class BestModelTracker:
         self.db_manager.append_to_history(new_metrics)
 
         epoch_treshold_for_evaluation = self.model.get_training_epoch_threshold_for_evaluation()
-        if isinstance(epoch_treshold_for_evaluation, int) and epoch < epoch_treshold_for_evaluation:
-            print('{}, epoch {}, global epoch threshold ({}) not satisfied!'
+        if isinstance(epoch_treshold_for_evaluation, int):
+            if epoch < epoch_treshold_for_evaluation:
+                print('{}, epoch {}, global epoch threshold ({}) not satisfied!'
                       .format(self.model_identifier, epoch, epoch_treshold_for_evaluation))
-            return
-        assert not (False in [m in new_metrics for m in epoch_treshold_for_evaluation])
+                return
+        else:
+            assert not (False in [m in new_metrics for m in epoch_treshold_for_evaluation])
 
         updated_metrics = {}
         for metric, new_v in new_metrics.items():
-            if metric in epoch_treshold_for_evaluation:
+            if (not isinstance(epoch_treshold_for_evaluation, int)) and \
+                    metric in epoch_treshold_for_evaluation:
                 if epoch < epoch_treshold_for_evaluation[metric]:
                     print('{}, epoch {}, epoch threshold for {} ({}) not satisfied!'
-                      .format(self.model_identifier, epoch, metric, epoch_treshold_for_evaluation[metric]))
+                          .format(self.model_identifier, epoch, metric, epoch_treshold_for_evaluation[metric]))
                     continue
             if self.best_history[metric][-1]['value'] < new_v['value']:
                 print('{}, epoch {}, found better score for {}: {:.4f}'

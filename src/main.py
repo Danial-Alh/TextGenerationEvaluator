@@ -87,13 +87,9 @@ if args.action == 'train':
         print('********************* training {} *********************'.format(model_identifier))
         print(len(trn), len(vld))
         ev = EvaluatorClass(trn, vld, None, parser=TEXT, mode=args.action, dm_name=args.data)
-
-        if args.model_names is None:
-            raise BaseException('specify the model to be trained!')
-        for model_name in args.model_names:
-            tracker = BestModelTracker(model_identifier, ev)
-            tracker.start()
-            tracker.model.reset_model()
+        tracker = BestModelTracker(model_identifier, ev)
+        tracker.start()
+        tracker.model.reset_model()
 
 
 elif args.action == 'gen':
