@@ -14,7 +14,7 @@ class metric_names:
 
 
 class BertFeature:
-    def __init__(self, bert_model_dir, model_name='bert-base-uncased', batch_size=512, device='cuda'):
+    def __init__(self, bert_model_dir, model_name='bert-base-uncased', batch_size=256, device='cuda'):
         self.tokenizer = trns.BertTokenizer.from_pretrained(model_name, cache_dir=bert_model_dir)
         self.model = trns.BertModel.from_pretrained(model_name, cache_dir=bert_model_dir).to(device)
         self.device = device

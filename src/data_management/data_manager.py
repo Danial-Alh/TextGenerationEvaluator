@@ -81,13 +81,14 @@ def load_real_dataset(dataset_name):
 
     TEXT.detokenize = lambda B: [revtok.detokenize(l) for l in B]
     TEXT.denumericalize = denumericalize
+    TEXT.fix_length = TEXT.max_length + 1
 
     lens = [len(x) for x in trn.text]
 
     print('vocab size: {}\ntrain size: {}\n valid size: {}\n test size: {}\n '
-          'min length: {}\n max length: {}\n mean train length: {:.2f}'
+          'min length: {}\n max length: {}\n mean train length: {:.2f}, loaded max length: {}'
           .format(len(TEXT.vocab), len(trn), len(vld), len(tst),
-                  np.min(lens), TEXT.max_length, np.mean(lens)))
+                  np.min(lens), np.max(lens), np.mean(lens), TEXT.max_length))
     return trn, vld, tst, TEXT
 
 
