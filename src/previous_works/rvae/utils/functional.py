@@ -29,5 +29,5 @@ def kld_coef(i, batchloader):
     total_iterations = batchloader.TOTAL_EPOCHS * batchloader.num_batches
 
     import math
-    return (math.tanh((i - (total_iterations)/2) / 2 * 7/2) + 1)/2
+    return (math.tanh((i - (total_iterations)/2) * (2/total_iterations) * 7/2) + 1)/2
     # return (math.tanh((i - 3500)/1000) + 1)/2
