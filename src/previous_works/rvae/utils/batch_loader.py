@@ -250,28 +250,34 @@ class BatchLoader:
         for i, line in enumerate(decoder_word_input):
             line_len = input_seq_len[i]
             to_add = max_input_seq_len - line_len
-            decoder_word_input[i] = line + [self.word_to_idx[self.pad_token]] * to_add
+            if to_add > 0:
+                decoder_word_input[i] = line + [self.word_to_idx[self.pad_token]] * to_add
 
         for i, line in enumerate(decoder_character_input):
             line_len = input_seq_len[i]
             to_add = max_input_seq_len - line_len
-            decoder_character_input[i] = line + [self.encode_characters(self.pad_token)] * to_add
+            if to_add > 0:
+                decoder_character_input[i] = line + \
+                    [self.encode_characters(self.pad_token)] * to_add
 
         for i, line in enumerate(decoder_output):
             line_len = input_seq_len[i]
             to_add = max_input_seq_len - line_len
-            decoder_output[i] = line + [self.word_to_idx[self.pad_token]] * to_add
+            if to_add > 0:
+                decoder_output[i] = line + [self.word_to_idx[self.pad_token]] * to_add
 
         for i, line in enumerate(encoder_word_input):
             line_len = input_seq_len[i]
             to_add = max_input_seq_len - line_len
-            encoder_word_input[i] = [self.word_to_idx[self.pad_token]] * to_add + line[::-1]
+            if to_add > 0:
+                encoder_word_input[i] = [self.word_to_idx[self.pad_token]] * to_add + line[::-1]
 
         for i, line in enumerate(encoder_character_input):
             line_len = input_seq_len[i]
             to_add = max_input_seq_len - line_len
-            encoder_character_input[i] = [self.encode_characters(
-                self.pad_token)] * to_add + line[::-1]
+            if to_add > 0:
+                encoder_character_input[i] = [self.encode_characters(
+                    self.pad_token)] * to_add + line[::-1]
 
         return np.array(encoder_word_input), np.array(encoder_character_input), \
             np.array(decoder_word_input), np.array(
