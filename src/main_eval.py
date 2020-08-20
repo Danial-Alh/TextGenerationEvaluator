@@ -1,3 +1,4 @@
+import datetime
 from types import SimpleNamespace
 
 from data_management.data_manager import load_oracle_dataset, load_real_dataset
@@ -14,11 +15,13 @@ result = TrainedModel.objects.aggregate(
             "$match":
             {
                 # "dataset_name": {"$in": ["amazon_app_book", "coco", "yelp_restaurant"]},
-                "dataset_name": {"$in": ["coco"]},
-                # "model_name": {"$in": ["dgsan", "mle_ehsan"]},
-                "model_name": {"$in": ["seqgan"]},
+                # "dataset_name": {"$in": []},
+
+                # "model_name": {"$in": ["maligan", "seqgan", "rankgan"]},
+                # "model_name": {"$in": []},
+
                 # "run": {"$in": [0]},
-                "train_temperature": {"$in": [""]},
+                # "train_temperature": {"$in": [""]},
             }
         },
         *LEFT_JOIN_QUERY,
@@ -27,8 +30,10 @@ result = TrainedModel.objects.aggregate(
             {
                 # "restore_type": {"$in": ["bleu3"]},
                 # "test_temperature": {"$in": ["{:.10f}".format(1e-2)]},
-                "test_temperature": {"$in": [""]},
-                "evaluated": False
+                # "test_temperature": {"$in": [""]},
+                "evaluated_model_created_at": {"$gte":
+                                               datetime.datetime.strptime("2020-08-14 00:00:00", '%Y-%m-%d %H:%M:%S')},
+                # "evaluated": False
             }
         },
         {"$sort": {"dataset_name": +1, "test_temperature": -1}}
@@ -36,10 +41,16 @@ result = TrainedModel.objects.aggregate(
 )
 
 result = list(result)
+for r in result:
+    del r["evaluated_model_created_at"]
+    del r["evaluated_model_updated_at"]
 
 model_identifier_dicts = [SimpleNamespace(**record) for record in result]
 
 print(len(model_identifier_dicts))
+
+for md in model_identifier_dicts:
+    print(md)
 
 input("continue?")
 

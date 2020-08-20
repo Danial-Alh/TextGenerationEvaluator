@@ -47,7 +47,6 @@ class TexyGen(BaseModel):
         super().init_model(train_samples, valid_samples, train_samples_loc, valid_samples_loc)
         self.model = self.model_class()
         self.model.init_real_trainng(self.parser)
-        self.load()
 
     def train(self):
         self.model.train_real(self.train_samples_loc, self)

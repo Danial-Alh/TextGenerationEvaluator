@@ -113,7 +113,7 @@ class RealWorldEvaluator(Evaluator):
         persample_scores = {}
 
         mean_scores = {
-            # 'nll': np.mean([r.metrics['nllq'].value for r in samples['test']]),
+            'nll': np.mean([r.metrics['nllq'].value for r in samples['test']]),
             'fbd': fbd_result,
             'embd': embd_result
         }
