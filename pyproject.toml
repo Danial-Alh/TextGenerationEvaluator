@@ -17,7 +17,7 @@ pandas = "^1.0.5"
 mongoengine = "^0.20.0"
 python-dotenv = "^0.14.0"
 pymongo = {version = "^3.10.1", extras = ["snappy", "zstd"]}
-transformers = "^3.0.2"
+transformers = "^4.30.0"
 fast-bleu = "0.0.85"
 scipy = "1.5.2"
 
